@@ -1,0 +1,115 @@
+{
+  "dataset": "IBM Transactions for Anti Money Laundering, HI-Small",
+  "source": "https://www.kaggle.com/datasets/ealtman2019/ibm-transactions-for-anti-money-laundering-aml",
+  "license": "CDLA-Sharing-1.0",
+  "rule_version": "rules-v1",
+  "slice_start": "2022-09-01",
+  "slice_end": "2022-09-02",
+  "file_transactions": 5078345,
+  "transactions": 1346480,
+  "accounts": 389873,
+  "laundering": 729,
+  "base_rate": 0.0005414116808270453,
+  "skipped_self": 522890,
+  "skipped_self_laundering": 1,
+  "currencies": 15,
+  "engine_seconds": 401.95092920800016,
+  "tx_level": {
+    "MEDIUM+ (score >= 30)": {
+      "tp": 88,
+      "fp": 90548,
+      "fn": 641,
+      "tn": 1255203,
+      "flagged": 90636,
+      "precision": 0.000970916633567236,
+      "recall": 0.12071330589849108,
+      "fpr": 0.06728436389792762,
+      "lift": 1.7933056636016622
+    },
+    "HIGH (score >= 60)": {
+      "tp": 49,
+      "fp": 29894,
+      "fn": 680,
+      "tn": 1315857,
+      "flagged": 29943,
+      "precision": 0.0016364425742243596,
+      "recall": 0.06721536351165981,
+      "fpr": 0.022213619012729696,
+      "lift": 3.0225475958046855
+    }
+  },
+  "typologies": [
+    {
+      "type": "Not in a documented pattern",
+      "laundering": 466,
+      "flagged": 83,
+      "max_score": 70
+    },
+    {
+      "type": "Bipartite",
+      "laundering": 60,
+      "flagged": 0,
+      "max_score": 25
+    },
+    {
+      "type": "Fan-Out",
+      "laundering": 44,
+      "flagged": 1,
+      "max_score": 30
+    },
+    {
+      "type": "Stack",
+      "laundering": 36,
+      "flagged": 1,
+      "max_score": 30
+    },
+    {
+      "type": "Scatter-Gather",
+      "laundering": 32,
+      "flagged": 0,
+      "max_score": 16
+    },
+    {
+      "type": "Gather-Scatter",
+      "laundering": 31,
+      "flagged": 1,
+      "max_score": 50
+    },
+    {
+      "type": "Cycle",
+      "laundering": 28,
+      "flagged": 1,
+      "max_score": 30
+    },
+    {
+      "type": "Fan-In",
+      "laundering": 18,
+      "flagged": 1,
+      "max_score": 33
+    },
+    {
+      "type": "Random",
+      "laundering": 14,
+      "flagged": 0,
+      "max_score": 20
+    }
+  ],
+  "signal_rates": {
+    "laundering": {
+      "UNUSUAL_AMOUNT": 0.10150891632373114,
+      "VELOCITY": 0.27983539094650206,
+      "RAPID_ONWARD": 0.08916323731138547,
+      "FAN_IN_RAPID_OUT": 0.09465020576131687,
+      "RELATIONSHIP_NOVELTY": 0.7722908093278463,
+      "SHARED_DEVICE": 0.0
+    },
+    "legitimate": {
+      "UNUSUAL_AMOUNT": 0.08341364784421487,
+      "VELOCITY": 0.3212533373558704,
+      "RAPID_ONWARD": 0.06849706966593375,
+      "FAN_IN_RAPID_OUT": 0.034851172319396384,
+      "RELATIONSHIP_NOVELTY": 0.3646685010822953,
+      "SHARED_DEVICE": 0.0
+    }
+  }
+}

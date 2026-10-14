@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Sample booking receipt (fictional)</title>
+<style>
+  body { margin: 0; background: #fff; font: 15px/1.5 Georgia, "Times New Roman", serif; color: #1a1a1a; }
+  .page { width: 760px; margin: 0 auto; padding: 44px 52px; }
+  .head { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 3px solid #1f3a5f; padding-bottom: 14px; }
+  .co { font-size: 24px; font-weight: bold; color: #1f3a5f; letter-spacing: .3px; }
+  .sub { font-size: 12px; color: #555; }
+  h1 { font-size: 19px; letter-spacing: 2px; text-align: center; margin: 26px 0 18px; }
+  table { width: 100%; border-collapse: collapse; margin: 10px 0 18px; }
+  td { padding: 7px 10px; border: 1px solid #c9c9c9; vertical-align: top; }
+  td.k { width: 34%; background: #f3f5f8; font-weight: bold; }
+  .amt { font-size: 20px; font-weight: bold; }
+  .foot { margin-top: 34px; display: flex; justify-content: space-between; font-size: 13px; }
+  .sig { border-top: 1px solid #333; padding-top: 4px; width: 220px; text-align: center; }
+  .note { margin-top: 26px; font-size: 11px; color: #777; border-top: 1px dashed #bbb; padding-top: 8px; }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="head">
+    <div>
+      <div class="co">Sunridge Developers Pvt Ltd</div>
+      <div class="sub">Registered office: 14 Lake View Road, Kolkata 700029 &middot; CIN U45200WB2014PTC000000</div>
+    </div>
+    <div class="sub" style="text-align:right">Receipt No. <b>SRD/RC/2026/0914</b><br>Date: <b>15 September 2026</b></div>
+  </div>
+
+  <h1>BOOKING AMOUNT RECEIPT</h1>
+
+  <table>
+    <tr><td class="k">Received from</td><td>Ms. Priya Bansal, Hyderabad</td></tr>
+    <tr><td class="k">Paid to</td><td>Sunridge Developers Pvt Ltd</td></tr>
+    <tr><td class="k">Amount received</td><td class="amt">INR 25,00,000.00</td></tr>
+    <tr><td class="k">Amount in words</td><td>Rupees Twenty-Five Lakh only</td></tr>
+    <tr><td class="k">Mode of payment</td><td>NEFT &middot; UTR FGBKN26258535313</td></tr>
+    <tr><td class="k">Towards</td><td>Booking amount for Flat 4B, Sunridge Heights, as per Agreement No. 2291</td></tr>
+    <tr><td class="k">Payment date</td><td>15 September 2026</td></tr>
+  </table>
+
+  <p>This receipt is issued subject to realisation of the amount. The balance consideration is payable as per the schedule in the agreement.</p>
+
+  <div class="foot">
+    <div>Place: Kolkata</div>
+    <div class="sig">Authorised Signatory<br>Sunridge Developers Pvt Ltd</div>
+  </div>
+
+  <div class="note">Fictional sample document created for testing FraudGraph AI. All names, numbers and addresses are invented.</div>
+</div>
+</body>
+</html>

@@ -1,0 +1,706 @@
+export type RiskBand = "LOW" | "MEDIUM" | "HIGH";
+export type CaseStatus = "OPEN" | "ESCALATED" | "DISMISSED" | "NEEDS_EVIDENCE";
+export type DecisionValue = "ESCALATE_FOR_REVIEW" | "DISMISS_ALERT" | "REQUEST_MORE_EVIDENCE";
+
+export interface Signal {
+  code: string;
+  label: string;
+  weight: number;
+  value: number;
+  contribution: number;
+  explanation: string;
+  supporting_tx_ids: string[];
+  params: Record<string, unknown>;
+  context_only: boolean;
+}
+
+export interface Transaction {
+  transaction_id: string;
+  source_account: string;
+  destination_account: string;
+  amount: number;
+  currency: string;
+  timestamp: string;
+  channel: string;
+  device_id: string | null;
+  description: string | null;
+  reference?: string | null;
+  source_name?: string | null;
+  destination_name?: string | null;
+  is_synthetic_added: number;
+  score?: number | null;
+  risk_band?: RiskBand | null;
+  control_status?: ControlStatus | null;
+}
+
+/** What a mitigation control did to a transfer: stopped it (HELD, then RELEASED or REJECTED) or FLAGGED it. */
+export type ControlStatus = "HELD" | "RELEASED" | "REJECTED" | "FLAGGED";
+
+export interface TransferControl {
+  transaction_id: string;
+  action_id: number;
+  case_id: string;
+  account_id: string;
+  control: string;
+  status: ControlStatus;
+  created_at: string;
+  resolved_at: string | null;
+  resolved_by: string | null;
+  resolution_note: string | null;
+}
+
+export interface ControlledTransfer extends TransferControl {
+  amount: number;
+  currency: string;
+  timestamp: string;
+  source_account: string;
+  destination_account: string;
+  source_name: string | null;
+  destination_name: string | null;
+}
+
+export interface AccountControl {
+  action_id: number;
+  action_code: string;
+  label: string;
+  case_id: string;
+  actor_label?: string;
+  created_at: string;
+  expires_at: string | null;
+}
+
+export interface CaseTransaction extends Transaction {
+  signals: Signal[];
+  uncertainties: string[];
+}
+
+export interface Baseline {
+  account_id: string;
+  available: boolean;
+  prior_outgoing_count: number;
+  median_amount?: number;
+  p90_amount?: number;
+}
+
+export interface TransactionDetail {
+  transaction: Transaction;
+  accounts: Record<string, AccountInfo>;
+  control: TransferControl | null;
+  assessment: {
+    score: number;
+    risk_band: RiskBand;
+    signals: Signal[];
+    uncertainties: string[];
+    baseline: Baseline;
+    time_window_minutes: number;
+    rule_version: string;
+    analysis_id: string;
+  } | null;
+  cases: { case_id: string; title: string; status: CaseStatus; risk_score: number; risk_band: RiskBand }[];
+  evidence_id: string;
+  ground_truth: { scenario_id: string; label: string } | null;
+  ground_truth_note: string;
+}
+
+export interface AccountInfo {
+  account_id: string;
+  account_type: string;
+  created_at: string;
+  holder_name: string | null;
+  account_number: string | null;
+  city: string | null;
+  branch_code?: string | null;
+  kyc_tier: string | null;
+}
+
+export interface AccountProfile {
+  account: AccountInfo;
+  summary: {
+    outgoing_count: number;
+    outgoing_total: number;
+    incoming_count: number;
+    incoming_total: number;
+    first_activity: string | null;
+    last_activity: string | null;
+    max_score: number | null;
+    devices: string[];
+  };
+  counterparties: { account_id: string; holder_name: string | null; transfers: number; total: number }[];
+  controls: AccountControl[];
+  cases: { case_id: string; title: string; status: CaseStatus; risk_score: number; risk_band: RiskBand }[];
+  recent_transactions: Transaction[];
+}
+
+export interface SearchResults {
+  query: string;
+  cases: { case_id: string; title: string; status: CaseStatus; risk_score: number; risk_band: RiskBand }[];
+  accounts: { account_id: string; holder_name: string | null; account_type: string; city: string | null; account_number: string | null }[];
+  transactions: { transaction_id: string; reference: string | null; amount: number; currency: string; timestamp: string; source_account: string; destination_account: string; risk_band: RiskBand | null; score: number | null }[];
+}
+
+export interface Paged<T> {
+  items: T[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+export interface CaseSummary {
+  case_id: string;
+  title: string;
+  status: CaseStatus;
+  risk_score: number;
+  risk_band: RiskBand;
+  transaction_count: number;
+  account_count: number;
+  signal_codes: string[];
+  rule_version: string;
+  active: boolean;
+  created_at: string;
+  updated_at: string;
+  latest_decision: { decision: DecisionValue; created_at: string } | null;
+  total_amount: number;
+  first_activity: string | null;
+  last_activity: string | null;
+  origin_account: string | null;
+  origin_name: string | null;
+}
+
+export interface Evidence {
+  case_id: string;
+  evidence_id: string;
+  source_type: "TRANSACTION" | "RULE_FINDING" | "GRAPH_PATH" | "BASELINE";
+  source_id: string;
+  description: string;
+  timestamp: string | null;
+  payload: Record<string, any>;
+  sort_order: number;
+}
+
+export interface AuditEvent {
+  event_id: number;
+  case_id: string | null;
+  event_type: string;
+  actor_type: "SYSTEM" | "AI" | "HUMAN";
+  event_payload: Record<string, any>;
+  created_at: string;
+}
+
+export interface DecisionRecord {
+  decision_id: number;
+  case_id: string;
+  decision: DecisionValue;
+  rationale: string;
+  actor_label: string;
+  created_at: string;
+}
+
+export interface Validation {
+  removed_ids: string[];
+  removed_accounts?: string[];
+  unsupported_claims: { section: string; text: string }[];
+  total_citations: number;
+  valid_citations: number;
+  citation_validity: number | null;
+  allowed_evidence_count: number;
+}
+
+export interface InvestigationResult {
+  case_summary: string;
+  observed_facts: { statement: string; evidence_ids: string[] }[];
+  risk_indicators: { indicator: string; reasoning: string; evidence_ids: string[] }[];
+  alternative_explanations: string[];
+  uncertainties: string[];
+  recommended_next_steps: string[];
+  review_priority: RiskBand;
+}
+
+export interface ReportAction {
+  action_code: string;
+  target_account: string | null;
+  rationale: string;
+  evidence_ids: string[];
+}
+
+export interface CaseReport {
+  headline: string;
+  executive_summary: string;
+  subject_accounts: { account_id: string; role: string; evidence_ids: string[] }[];
+  chronology: { timestamp: string; event: string; evidence_ids: string[] }[];
+  suspicious_indicators: { text: string; evidence_ids: string[] }[];
+  mitigating_factors: string[];
+  information_gaps: string[];
+  recommended_actions: ReportAction[];
+}
+
+export interface SuggestedAction {
+  action_code: string;
+  label: string;
+  target_account: string | null;
+  rationale: string;
+  basis: string[];
+  source: "PLAYBOOK";
+}
+
+export interface ApprovedAction {
+  action_id: number;
+  case_id: string;
+  action_code: string;
+  target_account: string | null;
+  note: string | null;
+  source: "PLAYBOOK" | "AI" | "ANALYST";
+  /** A control is ACTIVE until LIFTED; a task is OPEN until COMPLETED. */
+  status: "ACTIVE" | "OPEN" | "LIFTED" | "COMPLETED";
+  actor_label: string;
+  created_at: string;
+  closed_at: string | null;
+  closed_by: string | null;
+  outcome: string | null;
+  label: string;
+  kind: ActionKind;
+  queue: string | null;
+  due_at: string | null;
+  expires_at: string | null;
+}
+
+export type ActionKind = "CONTROL" | "TASK" | "RECORD";
+
+export interface ActionCatalogItem {
+  code: string;
+  label: string;
+  description: string;
+  needs_target: boolean;
+  kind: ActionKind;
+  effect: string;
+}
+
+export interface DocumentRecord {
+  document_id: number;
+  case_id: string;
+  transaction_id: string;
+  filename: string;
+  mime_type: string;
+  size_bytes: number;
+  sha256: string;
+  status: "OK" | "UNAVAILABLE";
+  verdict: "SUPPORTS" | "PARTIALLY_SUPPORTS" | "DOES_NOT_SUPPORT" | "UNREADABLE" | null;
+  actor_label: string;
+  created_at: string;
+  response: {
+    status: "OK" | "UNAVAILABLE";
+    reason?: string;
+    message?: string;
+    model?: string;
+    extraction?: {
+      document_type: string;
+      issuer_name: string;
+      payer_name: string;
+      payee_name: string;
+      amount: number;
+      currency: string;
+      document_date: string;
+      reference_numbers: string[];
+      purpose: string;
+      legibility: string;
+      observations: string[];
+      tamper_indicators: string[];
+    };
+    checks?: { check: string; result: "MATCH" | "PARTIAL" | "MISMATCH" | "NOT_FOUND"; document: string; record: string; note: string }[];
+  };
+}
+
+export interface SimilarMatch {
+  archive_id: string;
+  title: string;
+  pattern: string;
+  similarity: number;
+  outcome: "CONFIRMED_FRAUD" | "LEGITIMATE" | "INCONCLUSIVE";
+  outcome_label: string;
+  resolution: string;
+  days_to_resolve: number;
+  actions_taken: string[];
+  shared_signals: { code: string; label: string }[];
+}
+
+export interface SimilarCasesResult {
+  case_id: string;
+  method: "GEMINI_EMBEDDINGS" | "SIGNAL_OVERLAP";
+  model: string | null;
+  fallback_reason: string | null;
+  case_description: string;
+  archive_size: number;
+  matches: SimilarMatch[];
+  counter_example: SimilarMatch | null;
+  scoring: string;
+  outcome_summary: Record<string, number>;
+  note: string;
+}
+
+export interface ChatResult {
+  answer: string;
+  evidence_ids: string[];
+  grounded: boolean;
+}
+
+export type AiState = "CONNECTED" | "DEGRADED" | "INVALID_KEY" | "UNREACHABLE" | "NOT_CONFIGURED";
+
+export interface AiStatus {
+  state: AiState;
+  configured: boolean;
+  connected: boolean;
+  key_valid: boolean | null;
+  key_format_ok: boolean | null;
+  category: string;
+  message: string;
+  detail: string | null;
+  model: string;
+  backend?: string;
+  model_chain: string[];
+  active_model: string | null;
+  attempts: { model: string; ok: boolean; category: string; detail: string | null; seconds: number }[];
+  checked_at: string | null;
+  cached: boolean;
+}
+
+export interface AIResponse<T> {
+  status: "OK" | "UNAVAILABLE";
+  reason?: string;
+  message?: string;
+  detail?: string | null;
+  model?: string;
+  prompt_version: string;
+  result?: T;
+  validation?: Validation;
+}
+
+export interface AIRecord<T> {
+  investigation_id: number;
+  created_at: string;
+  kind: "INVESTIGATION" | "CHAT" | "REPORT";
+  question: string | null;
+  response: AIResponse<T>;
+}
+
+export interface CaseDetail {
+  case: CaseSummary & { transaction_ids: string[]; accounts: string[]; analysis_id: string };
+  accounts: Record<string, AccountInfo>;
+  transactions: CaseTransaction[];
+  signal_summary: {
+    code: string;
+    label: string;
+    weight: number;
+    context_only: boolean;
+    transactions: number;
+    max_contribution: number;
+  }[];
+  uncertainties: string[];
+  evidence: Evidence[];
+  decisions: DecisionRecord[];
+  audit_events: AuditEvent[];
+  latest_investigation: AIRecord<InvestigationResult> | null;
+  latest_report: AIRecord<CaseReport> | null;
+  suggested_actions: SuggestedAction[];
+  actions: ApprovedAction[];
+  controlled_transfers: ControlledTransfer[];
+  account_controls: Record<string, AccountControl[]>;
+  action_catalog: ActionCatalogItem[];
+  documents: DocumentRecord[];
+  chat_history: AIRecord<ChatResult>[];
+  ground_truth: { scenario_id: string; label: string; n: number }[];
+  ground_truth_note: string;
+}
+
+export interface GraphNode {
+  id: string;
+  holder_name: string | null;
+  city: string | null;
+  kyc_tier: string | null;
+  account_type: string | null;
+  created_at: string | null;
+  in_focus: boolean;
+  max_score: number | null;
+  in_degree: number;
+  out_degree: number;
+}
+
+export interface GraphEdge {
+  id: string;
+  source: string;
+  target: string;
+  amount: number;
+  currency: string | null;
+  timestamp: string;
+  channel: string | null;
+  score: number | null;
+  risk_band: RiskBand | null;
+  in_focus: boolean;
+  is_synthetic_added: boolean;
+}
+
+export interface GraphPath {
+  evidence_id?: string;
+  transaction_ids: string[];
+  accounts: string[];
+  start: string;
+  end: string;
+  duration_minutes: number;
+}
+
+export interface GraphData {
+  scope: Record<string, unknown>;
+  time_window_minutes: number;
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+  paths: GraphPath[];
+}
+
+export interface Dashboard {
+  dataset_version: string | null;
+  reset_at: string | null;
+  totals: {
+    transactions: number;
+    accounts: number;
+    synthetic_added: number;
+    cases: number;
+    open_cases: number;
+    reviewed_cases: number;
+    decisions: number;
+    flagged_transactions: number;
+    flagged_amount: number;
+    total_volume: number;
+  };
+  activity_by_day: { day: string; transactions: number; volume: number; flagged: number; flagged_amount: number }[];
+  by_channel: { channel: string; transfers: number; flagged: number; flagged_amount: number }[];
+  top_accounts: {
+    account_id: string;
+    holder_name: string | null;
+    account_type: string | null;
+    city: string | null;
+    kyc_tier: string | null;
+    flagged_transfers: number;
+    flagged_amount: number;
+    max_score: number;
+  }[];
+  ai: {
+    answered: number;
+    unavailable: number;
+    citations_total: number;
+    citations_valid: number;
+    references_removed: number;
+    investigations: number;
+    reports: number;
+    follow_ups: number;
+    documents_checked: number;
+    documents_by_verdict: Record<string, number>;
+  };
+  pipeline: { stage: string; value: number }[];
+  mitigation: {
+    accounts_on_hold: number;
+    accounts_monitored: number;
+    held: { count: number; amount: number };
+    rejected: { count: number; amount: number };
+    released: { count: number; amount: number };
+    flagged: { count: number; amount: number };
+    tasks_open: number;
+    tasks_completed: number;
+  };
+  actions_approved: number;
+  top_signals: { code: string; label: string; count: number }[];
+  recent_activity: (AuditEvent & { title: string | null })[];
+  transactions_by_band: Record<RiskBand, number>;
+  cases_by_band: Record<RiskBand, number>;
+  cases_by_status: Record<string, number>;
+  recent_cases: (Pick<CaseSummary, "case_id" | "title" | "status" | "risk_score" | "risk_band" | "updated_at" | "signal_codes"> & {
+    transaction_count: number;
+    account_count: number;
+    total_amount: number;
+    first_activity: string | null;
+    origin_name: string | null;
+  })[];
+  last_analysis: {
+    analysis_id: string;
+    params: { time_window_minutes: number; scenario_id: string | null };
+    transactions_analyzed: number;
+    rule_version: string;
+    created_at: string;
+  } | null;
+}
+
+export interface Health {
+  status: string;
+  app_version: string;
+  dataset_version: string | null;
+  data_loaded: boolean;
+  rule_version: string;
+  prompt_version: string;
+  gemini_configured: boolean;
+  gemini_model: string;
+  gemini_backend: string | null;
+  demo_token_required: boolean;
+}
+
+export interface AnalysisDiff {
+  first_run: boolean;
+  new_cases: { case_id: string; title: string; risk_score: number; risk_band: RiskBand }[];
+  updated_cases: {
+    case_id: string;
+    title: string;
+    score_before: number;
+    score_after: number;
+    band_before: RiskBand;
+    band_after: RiskBand;
+    added_transaction_ids: string[];
+  }[];
+  deactivated_cases: string[];
+  new_transactions: string[];
+  changed_transactions: {
+    transaction_id: string;
+    score_before: number | null;
+    score_after: number;
+    band_before: RiskBand | null;
+    band_after: RiskBand;
+    added_signals: string[];
+    removed_signals: string[];
+  }[];
+  changed_transactions_total: number;
+}
+
+export interface AnalysisRun {
+  analysis_id: string;
+  rule_version: string;
+  time_window_minutes: number;
+  transactions_analyzed: number;
+  cases_created: number;
+  active_cases: number;
+  focus_case_ids: string[];
+  diff: AnalysisDiff;
+}
+
+export interface Scenario {
+  scenario_id: string;
+  label: string;
+  title: string;
+  description: string;
+  transaction_ids: string[];
+  case_ids: string[];
+}
+
+export interface SuggestedWhatIf {
+  label: string;
+  source_account: string;
+  destination_account: string;
+  amount: number;
+  timestamp: string;
+  channel: string;
+  description: string;
+}
+
+export interface RulesInfo {
+  rule_version: string;
+  bands: Record<RiskBand, number>;
+  case_min_score: number;
+  rules: { code: string; weight: number; rule: string }[];
+  note: string;
+}
+
+export class ApiError extends Error {
+  constructor(public status: number, public code: string, message: string, public details: unknown[] = []) {
+    super(message);
+  }
+}
+
+const TOKEN_KEY = "fraudgraph.demoToken";
+
+function readToken(): string | null {
+  try {
+    return sessionStorage.getItem(TOKEN_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function storeToken(token: string): void {
+  try {
+    sessionStorage.setItem(TOKEN_KEY, token);
+  } catch {
+    /* storage unavailable: token used for this request only */
+  }
+}
+
+async function request<T>(method: string, path: string, body?: unknown, retry = true, token?: string): Promise<T> {
+  const headers: Record<string, string> = { Accept: "application/json" };
+  if (body !== undefined) headers["Content-Type"] = "application/json";
+  const demoToken = token ?? readToken();
+  if (demoToken) headers["X-Demo-Token"] = demoToken;
+  let res: Response;
+  try {
+    res = await fetch(path, { method, headers, body: body !== undefined ? JSON.stringify(body) : undefined });
+  } catch {
+    throw new ApiError(0, "NETWORK_ERROR", "Could not reach the server. Check your connection and try again.");
+  }
+  const text = await res.text();
+  let data: any = null;
+  try {
+    data = text ? JSON.parse(text) : null;
+  } catch {
+    data = null;
+  }
+  if (!res.ok) {
+    const err = data?.error;
+    if (res.status === 401 && err?.code === "DEMO_TOKEN_REQUIRED" && retry) {
+      const entered = window.prompt("This administrative action needs the workspace access token:");
+      if (entered) {
+        storeToken(entered);
+        return request<T>(method, path, body, false, entered);
+      }
+    }
+    throw new ApiError(res.status, err?.code ?? "HTTP_ERROR", err?.message ?? `Request failed (${res.status}).`, err?.details ?? []);
+  }
+  return data as T;
+}
+
+function qs(params: Record<string, string | number | boolean | undefined | null>): string {
+  const p = new URLSearchParams();
+  Object.entries(params).forEach(([k, v]) => {
+    if (v !== undefined && v !== null && v !== "") p.set(k, String(v));
+  });
+  const s = p.toString();
+  return s ? `?${s}` : "";
+}
+
+export const api = {
+  health: () => request<Health>("GET", "/api/health"),
+  aiStatus: (refresh = false) => request<AiStatus>("GET", `/api/ai/status${refresh ? "?refresh=true" : ""}`),
+  rules: () => request<RulesInfo>("GET", "/api/rules"),
+  dashboard: () => request<Dashboard>("GET", "/api/dashboard"),
+  reset: () => request<{ dataset_version: string; transactions: number; accounts: number; message: string }>("POST", "/api/demo/reset"),
+  scenarios: () => request<{ scenarios: Scenario[]; suggested_what_if: SuggestedWhatIf | null }>("GET", "/api/demo/scenarios"),
+  runAnalysis: (body: { scenario_id?: string; time_window_minutes?: number } = {}) =>
+    request<AnalysisRun>("POST", "/api/analysis/run", body),
+  transactions: (params: Record<string, string | number | boolean | undefined>) =>
+    request<Paged<Transaction>>("GET", `/api/transactions${qs(params)}`),
+  account: (id: string) => request<AccountProfile>("GET", `/api/accounts/${encodeURIComponent(id)}`),
+  search: (q: string) => request<SearchResults>("GET", `/api/search${qs({ q })}`),
+  transaction: (id: string) => request<TransactionDetail>("GET", `/api/transactions/${encodeURIComponent(id)}`),
+  addSyntheticTransaction: (body: Record<string, unknown>) =>
+    request<TransactionDetail & { created_accounts: string[]; message: string }>("POST", "/api/transactions/demo", body),
+  cases: (params: Record<string, string | undefined>) => request<{ items: CaseSummary[]; total: number }>("GET", `/api/cases${qs(params)}`),
+  case: (id: string) => request<CaseDetail>("GET", `/api/cases/${encodeURIComponent(id)}`),
+  graph: (params: { case_id?: string; account_id?: string; time_window_minutes?: number }) =>
+    request<GraphData>("GET", `/api/graph${qs(params)}`),
+  investigate: (id: string, question?: string) =>
+    request<AIRecord<InvestigationResult>>("POST", `/api/cases/${encodeURIComponent(id)}/investigate`, question ? { question } : {}),
+  chat: (id: string, message: string) => request<AIRecord<ChatResult>>("POST", `/api/cases/${encodeURIComponent(id)}/chat`, { message }),
+  verifyDocument: (id: string, body: { filename: string; mime_type: string; data_base64: string; transaction_id: string; actor_label?: string }) =>
+    request<DocumentRecord>("POST", `/api/cases/${encodeURIComponent(id)}/documents`, body),
+  similarCases: (id: string) => request<SimilarCasesResult>("GET", `/api/cases/${encodeURIComponent(id)}/similar`),
+  draftReport: (id: string) => request<AIRecord<CaseReport>>("POST", `/api/cases/${encodeURIComponent(id)}/report`),
+  approveAction: (id: string, body: { action_code: string; target_account?: string | null; note?: string; source: "PLAYBOOK" | "AI" | "ANALYST"; actor_label?: string }) =>
+    request<{ action: ApprovedAction; effect: string }>("POST", `/api/cases/${encodeURIComponent(id)}/actions`, body),
+  closeAction: (id: string, actionId: number, body: { outcome: string; actor_label?: string }) =>
+    request<{ action: ApprovedAction }>("POST", `/api/cases/${encodeURIComponent(id)}/actions/${actionId}/close`, body),
+  resolveHeldTransfer: (id: string, transactionId: string, body: { resolution: "RELEASE" | "REJECT"; note: string; actor_label?: string }) =>
+    request<{ transfer: TransferControl }>("POST", `/api/cases/${encodeURIComponent(id)}/held-transfers/${encodeURIComponent(transactionId)}`, body),
+  decide: (id: string, body: { decision: DecisionValue; rationale: string; actor_label?: string }) =>
+    request<{ decision: DecisionRecord; case_status: CaseStatus }>("POST", `/api/cases/${encodeURIComponent(id)}/decision`, body),
+};

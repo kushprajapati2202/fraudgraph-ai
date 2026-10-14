@@ -1,0 +1,14 @@
+.env
+*.db
+*.db-journal
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+frontend/node_modules/
+frontend/dist/
+.DS_Store
+.vscode/*
+!.vscode/tasks.json
+frontend/node_modules/.fraudgraph-platform

@@ -1,0 +1,47 @@
+{
+  "version": "2.0.0",
+  "inputs": [
+    {
+      "id": "mode",
+      "type": "pickString",
+      "description": "Run through WSL (default) or native Windows Python/Node?",
+      "options": ["", "-Native"],
+      "default": ""
+    }
+  ],
+  "tasks": [
+    {
+      "label": "FraudGraph: setup",
+      "type": "shell",
+      "command": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/windows/fg.ps1 setup ${input:mode}",
+      "problemMatcher": []
+    },
+    {
+      "label": "FraudGraph: dev (API + UI)",
+      "type": "shell",
+      "command": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/windows/fg.ps1 dev ${input:mode}",
+      "isBackground": true,
+      "problemMatcher": []
+    },
+    {
+      "label": "FraudGraph: check (tests + build)",
+      "type": "shell",
+      "command": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/windows/fg.ps1 check ${input:mode}",
+      "group": { "kind": "test", "isDefault": true },
+      "problemMatcher": []
+    },
+    {
+      "label": "FraudGraph: serve (single URL :8000)",
+      "type": "shell",
+      "command": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/windows/fg.ps1 serve ${input:mode}",
+      "isBackground": true,
+      "problemMatcher": []
+    },
+    {
+      "label": "FraudGraph: evaluate",
+      "type": "shell",
+      "command": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/windows/fg.ps1 check -Eval ${input:mode}",
+      "problemMatcher": []
+    }
+  ]
+}
