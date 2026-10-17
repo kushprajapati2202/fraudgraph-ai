@@ -70,7 +70,7 @@ Screenshots are in [docs/screenshots/](docs/screenshots/). Regenerate them with 
 
 | Area | What it does |
 |---|---|
-| **Overview** | KPIs, daily transfer activity with the flagged portion, cases by priority, signal frequency, the review queue and recent activity |
+| **Overview** | KPIs, *Recommended for you* (up to five next steps for the analyst named in Settings: overdue tasks, transfers waiting on their holds, evidence follow-ups, cases similar to ones they escalated, then unreviewed high-priority cases), daily transfer activity with the flagged portion, cases by priority, signal frequency, the review queue and recent activity |
 | **Cases** and case page | Queue with status tabs. The case page shows the score ring, amount moved, money-flow graph, accounts involved, signals, timeline, evidence, the Gemini panel, the decision form and the audit history. |
 | **Transactions** | Every transfer with holder names, bank-style references and filters |
 | **Network** | The flagged network. Click an account to focus on it. |
@@ -100,7 +100,7 @@ python scripts/check_gemini.py --investigate
 
 ## Guided tour
 
-The **Tour** button in the top bar starts an 18-step walkthrough that moves through the dashboard, a case, transactions, the network and the what-if page, highlighting each area. It starts automatically on a first visit. Use Next and Back or the arrow keys, and Esc to close.
+The **Tour** button in the top bar starts a 24-step walkthrough that moves through the dashboard, a case, transactions, the network and the what-if page, highlighting each area. It starts automatically on a first visit. Use Next and Back or the arrow keys, and Esc to close.
 
 ## Demo path (3 minutes)
 1. **Dashboard.** Start with **Reset demo**, then **Run analysis**. Point out the synthetic-data banner.
@@ -139,6 +139,7 @@ All routes use the `/api` prefix and return JSON. Errors use `{"error": {"code",
 | `GET /ai/status` | Live Gemini check: key accepted, which model is answering, and why not if it isn't. Cached for about 2 minutes; `?refresh=true` forces a new check. |
 | `GET /rules` | Rule catalogue, weights and bands |
 | `GET /dashboard` | Counts, bands, recent cases, last analysis |
+| `GET /recommendations` | `?analyst=<name>` returns up to five rule-based next steps for that analyst, most urgent first. Without a name (or with the placeholder `Analyst`) the list is team-wide. |
 | `POST /demo/reset` | Restore the ds-v1 baseline. Needs `X-Demo-Token` when `DEMO_TOKEN` is set. |
 | `GET /demo/scenarios` | Labeled scenarios, their cases, and the suggested what-if |
 | `GET /transactions` | Filters: `account_id, from, to, min_amount, max_amount, q, channel, risk_band, synthetic_only, sort, order, page, page_size` |

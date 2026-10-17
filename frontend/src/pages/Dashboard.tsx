@@ -5,6 +5,7 @@ import { SecondOpinion } from "../components/ai";
 import { ActivityChart, BandMix, HBars } from "../components/charts";
 import { AskPortfolio, BriefingCard, DayExplain, PatternsCard } from "../components/DashboardAi";
 import { Empty, ErrorState, Loading, ScoreRing, StatusChip } from "../components/common";
+import RecommendationsCard from "../components/Recommendations";
 import { IconCases, IconChevron, IconFlow, IconLock, IconRefresh, IconSparkle, IconTransactions, IconUser } from "../components/icons";
 import { usePrefs } from "../prefs";
 import { caseHeadline, errorMessage, fmtAmount, fmtCompact, fmtTime, plural, useAsync, usePageTitle } from "../util";
@@ -92,6 +93,7 @@ export default function DashboardPage() {
   const [aiKey, setAiKey] = useState(0);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [recsKey, setRecsKey] = useState(0);
   const [error, setError] = useState<string | null>(null);
   usePageTitle("Overview");
 
@@ -103,6 +105,7 @@ export default function DashboardPage() {
       setNotice(`Analysis ${r.analysis_id} complete: ${r.transactions_analyzed.toLocaleString()} transfers scored, ${r.active_cases} active cases.`);
       dash.reload();
       setAiKey((k) => k + 1);
+      setRecsKey((k) => k + 1);
     } catch (e) {
       setError(errorMessage(e));
     } finally {
@@ -184,6 +187,8 @@ export default function DashboardPage() {
           </span>
         </div>
       </div>
+
+      <RecommendationsCard refreshKey={recsKey} />
 
       <div className="grid-main grid-even">
         <section className="card card-flush" aria-labelledby="queue-heading" data-tour="dash-cases">

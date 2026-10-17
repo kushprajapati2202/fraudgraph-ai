@@ -1,16 +1,23 @@
 import json
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 
 from backend.api.cases import _latest_ai_priority
 from backend.db import connect, get_meta, row_to_dict
-from backend.services import mitigation
+from backend.services import mitigation, recommendations
 from backend.services.risk_engine import CASE_MIN_SCORE, LABELS
 
 router = APIRouter(tags=["dashboard"])
 
 BANDS = ("HIGH", "MEDIUM", "LOW")
 REVIEWED = ("ESCALATED", "DISMISSED", "NEEDS_EVIDENCE")
+
+
+@router.get("/recommendations")
+def recommended(analyst: str | None = Query(default=None, max_length=60, pattern=r"^[A-Za-z0-9 _.\-]+$")) -> dict:
+    """Up to five next steps for one analyst (by the name set in Settings), most urgent first. Rule-based."""
+    with connect() as conn:
+        return recommendations.recommend(conn, analyst)
 
 
 @router.get("/dashboard")

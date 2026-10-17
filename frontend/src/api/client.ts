@@ -717,6 +717,35 @@ export interface Dashboard {
   } | null;
 }
 
+export type RecommendationKind =
+  | "OVERDUE_TASK"
+  | "TASK_DUE_SOON"
+  | "HELD_TRANSFERS"
+  | "FOLLOW_UP"
+  | "SIMILAR_TO_ESCALATED"
+  | "HIGH_RISK_UNREVIEWED";
+
+export interface Recommendation {
+  kind: RecommendationKind;
+  case_id: string;
+  title: string;
+  reason: string;
+  risk_score: number;
+  risk_band: RiskBand;
+  account_id?: string | null;
+  due_at?: string;
+  queue?: string | null;
+  count?: number;
+  amount?: number;
+  similar_case_id?: string;
+}
+
+export interface Recommendations {
+  personalized: boolean;
+  analyst: string | null;
+  items: Recommendation[];
+}
+
 export interface Health {
   status: string;
   app_version: string;
@@ -864,6 +893,7 @@ export const api = {
   aiStatus: (refresh = false) => request<AiStatus>("GET", `/api/ai/status${refresh ? "?refresh=true" : ""}`),
   rules: () => request<RulesInfo>("GET", "/api/rules"),
   dashboard: () => request<Dashboard>("GET", "/api/dashboard"),
+  recommendations: (analyst: string) => request<Recommendations>("GET", `/api/recommendations${qs({ analyst })}`),
   reset: () => request<{ dataset_version: string; transactions: number; accounts: number; message: string }>("POST", "/api/demo/reset"),
   scenarios: () => request<{ scenarios: Scenario[]; suggested_what_if: SuggestedWhatIf | null }>("GET", "/api/demo/scenarios"),
   runAnalysis: (body: { scenario_id?: string; time_window_minutes?: number } = {}) =>

@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { api, type ApprovedAction, type CaseDetail, type ControlledTransfer, type Evidence } from "../api/client";
+import { useCallback, useMemo, useState } from "react";
+import { api, type AIRecord, type ApprovedAction, type CaseDetail, type CaseReport, type ControlledTransfer, type Evidence } from "../api/client";
 import { ControlTag } from "./common";
 import { useAiStatus } from "../health";
 import { usePrefs } from "../prefs";
@@ -7,6 +7,7 @@ import { caseHeadline, errorMessage, fmtAmount, fmtDuration, fmtTime } from "../
 import { IconSparkle } from "./icons";
 import { useInspector } from "./Inspector";
 import { Citations } from "./InvestigatorPanel";
+import { ExpandButton, Modal, Toast } from "./Modal";
 
 interface Props {
   detail: CaseDetail;
@@ -260,14 +261,82 @@ function useLookups(detail: CaseDetail) {
   }, [detail]);
 }
 
+/** The report itself; shown in the card and in the full-view pop-up (where every section starts open). */
+function ReportDetails({ r, resp, detail, allOpen = false }: {
+  r: CaseReport;
+  resp: AIRecord<CaseReport>["response"];
+  detail: CaseDetail;
+  allOpen?: boolean;
+}) {
+  const { nameOf, byId } = useLookups(detail);
+  const { openAccount } = useInspector();
+  return (
+    <>
+      <h3 style={{ fontSize: "1rem", margin: 0 }}>{r.headline}</h3>
+      <p className="ai-summary">{r.executive_summary}</p>
+
+      <details open>
+        <summary className="section-title" style={{ cursor: "pointer" }}>Accounts and roles ({r.subject_accounts.length})</summary>
+        <ul className="ai-list" style={{ marginTop: 6 }}>
+          {r.subject_accounts.map((a) => (
+            <li key={a.account_id}>
+              <button className="link-button" onClick={() => openAccount(a.account_id)}>
+                {nameOf(a.account_id)}
+              </button>{" "}
+              <span className="mono muted small">{a.account_id}</span>: {a.role} <Citations ids={a.evidence_ids} byId={byId} />
+            </li>
+          ))}
+        </ul>
+      </details>
+      <details open>
+        <summary className="section-title" style={{ cursor: "pointer" }}>Chronology ({r.chronology.length})</summary>
+        <ol className="ai-list" style={{ marginTop: 6 }}>
+          {r.chronology.map((e, i) => (
+            <li key={i}>
+              <span className="mono small muted">{e.timestamp.replace("T", " ").slice(0, 16)}</span> {e.event} <Citations ids={e.evidence_ids} byId={byId} />
+            </li>
+          ))}
+        </ol>
+      </details>
+      <details open={allOpen}>
+        <summary className="section-title" style={{ cursor: "pointer" }}>Indicators, mitigating factors and gaps</summary>
+        <h4 style={{ marginTop: 8 }}>Indicators</h4>
+        <ul className="ai-list">
+          {r.suspicious_indicators.map((x, i) => (
+            <li key={i}>
+              {x.text} <Citations ids={x.evidence_ids} byId={byId} />
+            </li>
+          ))}
+        </ul>
+        <h4 style={{ marginTop: 8 }}>Mitigating factors</h4>
+        <ul className="ai-list">{r.mitigating_factors.map((x, i) => <li key={i}>{x}</li>)}</ul>
+        <h4 style={{ marginTop: 8 }}>Information gaps</h4>
+        <ul className="ai-list">{r.information_gaps.map((x, i) => <li key={i}>{x}</li>)}</ul>
+      </details>
+      {resp?.validation?.unsupported_claims.length ? (
+        <div className="callout callout-warn">
+          {resp.validation.unsupported_claims.length} statement(s) had no valid evidence and were left out of the report.
+        </div>
+      ) : null}
+    </>
+  );
+}
+
 /** AI-drafted internal escalation report with verified citations, plus a downloadable case file. */
 export function ReportPanel({ detail, onChanged }: Props) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const { labelOf, nameOf, byId } = useLookups(detail);
-  const { openAccount } = useInspector();
+  const { labelOf, nameOf } = useLookups(detail);
   const ai = useAiStatus();
-  const record = detail.latest_report;
+  const caseId = detail.case.case_id;
+  const [fullView, setFullView] = useState(false);
+  const [notice, setNotice] = useState<{ tone: "ok" | "warn"; title: string; text: string } | null>(null);
+  const closeFullView = useCallback(() => setFullView(false), []);
+  const closeNotice = useCallback(() => setNotice(null), []);
+  // The record just returned, so "View report" works before the case page has finished reloading.
+  const [fresh, setFresh] = useState<{ caseId: string; record: AIRecord<CaseReport> } | null>(null);
+  const saved = detail.latest_report;
+  const record = fresh && fresh.caseId === caseId && fresh.record.investigation_id > (saved?.investigation_id ?? 0) ? fresh.record : saved;
   const resp = record?.response;
   const r = resp?.status === "OK" ? resp.result : undefined;
 
@@ -275,8 +344,13 @@ export function ReportPanel({ detail, onChanged }: Props) {
     setBusy(true);
     setError(null);
     try {
-      await api.draftReport(detail.case.case_id);
+      const drafted = await api.draftReport(caseId);
+      setFresh({ caseId, record: drafted });
       onChanged();
+      setNotice(drafted.response.status === "OK"
+        ? { tone: "ok", title: "Your escalation report is ready", text: "Gemini has finished drafting the report for this case." }
+        : { tone: "warn", title: "Gemini couldn't draft the report",
+            text: drafted.response.message ?? "The case file download and the playbook actions still work." });
       ai.recheck();
     } catch (e) {
       setError(errorMessage(e));
@@ -294,7 +368,10 @@ export function ReportPanel({ detail, onChanged }: Props) {
           </span>{" "}
           Escalation report
         </h2>
-        <span className="chip chip-ai">AI draft &middot; needs review</span>
+        <div className="card-tools">
+          <span className="chip chip-ai">AI draft &middot; needs review</span>
+          {r ? <ExpandButton onClick={() => setFullView(true)} label="Open report in full view" /> : null}
+        </div>
       </div>
       <p className="muted small">
         Gemini drafts an internal report for compliance from this case's evidence: roles, chronology, indicators, mitigating factors and gaps. Every citation is
@@ -329,53 +406,43 @@ export function ReportPanel({ detail, onChanged }: Props) {
               ? ` · ${resp.validation.removed_ids.length + (resp.validation.removed_accounts?.length ?? 0)} invalid reference(s) removed`
               : ""}
           </div>
-          <h3 style={{ fontSize: "1rem", margin: 0 }}>{r.headline}</h3>
-          <p className="ai-summary">{r.executive_summary}</p>
-
-          <details open>
-            <summary className="section-title" style={{ cursor: "pointer" }}>Accounts and roles ({r.subject_accounts.length})</summary>
-            <ul className="ai-list" style={{ marginTop: 6 }}>
-              {r.subject_accounts.map((a) => (
-                <li key={a.account_id}>
-                  <button className="link-button" onClick={() => openAccount(a.account_id)}>
-                    {nameOf(a.account_id)}
-                  </button>{" "}
-                  <span className="mono muted small">{a.account_id}</span>: {a.role} <Citations ids={a.evidence_ids} byId={byId} />
-                </li>
-              ))}
-            </ul>
-          </details>
-          <details open>
-            <summary className="section-title" style={{ cursor: "pointer" }}>Chronology ({r.chronology.length})</summary>
-            <ol className="ai-list" style={{ marginTop: 6 }}>
-              {r.chronology.map((e, i) => (
-                <li key={i}>
-                  <span className="mono small muted">{e.timestamp.replace("T", " ").slice(0, 16)}</span> {e.event} <Citations ids={e.evidence_ids} byId={byId} />
-                </li>
-              ))}
-            </ol>
-          </details>
-          <details>
-            <summary className="section-title" style={{ cursor: "pointer" }}>Indicators, mitigating factors and gaps</summary>
-            <h4 style={{ marginTop: 8 }}>Indicators</h4>
-            <ul className="ai-list">
-              {r.suspicious_indicators.map((x, i) => (
-                <li key={i}>
-                  {x.text} <Citations ids={x.evidence_ids} byId={byId} />
-                </li>
-              ))}
-            </ul>
-            <h4 style={{ marginTop: 8 }}>Mitigating factors</h4>
-            <ul className="ai-list">{r.mitigating_factors.map((x, i) => <li key={i}>{x}</li>)}</ul>
-            <h4 style={{ marginTop: 8 }}>Information gaps</h4>
-            <ul className="ai-list">{r.information_gaps.map((x, i) => <li key={i}>{x}</li>)}</ul>
-          </details>
-          {resp?.validation?.unsupported_claims.length ? (
-            <div className="callout callout-warn">
-              {resp.validation.unsupported_claims.length} statement(s) had no valid evidence and were left out of the report.
-            </div>
-          ) : null}
+          <ReportDetails r={r} resp={resp!} detail={detail} />
         </div>
+      ) : null}
+
+      {fullView && r ? (
+        <Modal
+          title={<><span className="ai-mark" aria-hidden="true"><IconSparkle size={17} /></span> Escalation report</>}
+          subtitle={<>{caseId} &middot; {resp?.model} &middot; {fmtTime(record?.created_at)} UTC &middot; {resp?.validation?.valid_citations ?? 0} citations verified</>}
+          onClose={closeFullView}
+          footer={
+            <div className="row-center" style={{ width: "100%", justifyContent: "space-between" }}>
+              <span className="chip chip-ai">AI draft &middot; needs review</span>
+              <button className="btn btn-small" onClick={() => download(`${caseId}-case-file.md`, buildMarkdown(detail, labelOf, nameOf))}>
+                Download case file
+              </button>
+            </div>
+          }
+        >
+          <div className="stack-sm">
+            <ReportDetails r={r} resp={resp!} detail={detail} allOpen />
+          </div>
+        </Modal>
+      ) : null}
+
+      {notice ? (
+        <Toast
+          tone={notice.tone}
+          title={notice.title}
+          onClose={closeNotice}
+          action={notice.tone === "ok" ? (
+            <button className="btn btn-small btn-primary" onClick={() => { setNotice(null); setFullView(true); }}>
+              View report
+            </button>
+          ) : null}
+        >
+          {notice.text}
+        </Toast>
       ) : null}
     </section>
   );
