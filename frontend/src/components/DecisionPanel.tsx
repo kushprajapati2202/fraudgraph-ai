@@ -1,8 +1,9 @@
-import { useState, type FormEvent } from "react";
+import { useState, type FormEvent, type ReactNode } from "react";
 import { api, type AuditEvent, type CaseStatus, type DecisionRecord, type DecisionValue } from "../api/client";
 import { usePrefs } from "../prefs";
 import { errorMessage, fmtAmount, fmtTime } from "../util";
 import { StatusChip } from "./common";
+import { IconRefresh, IconSparkle, IconUser } from "./icons";
 
 const OPTIONS: { value: DecisionValue; label: string; help: string }[] = [
   { value: "ESCALATE_FOR_REVIEW", label: "Escalate for review", help: "Send to a senior reviewer with your rationale." },
@@ -54,8 +55,8 @@ export function DecisionPanel({ caseId, status, decisions, onSaved }: Props) {
   return (
     <section className="card" aria-labelledby="decision-heading" data-tour="case-decision">
       <div className="card-head">
-        <h2 id="decision-heading">
-          <span aria-hidden="true">{"\u{1F464}"}</span> Analyst decision
+        <h2 id="decision-heading" className="inline">
+          <IconUser size={17} /> Analyst decision
         </h2>
         <StatusChip status={status} />
       </div>
@@ -68,7 +69,7 @@ export function DecisionPanel({ caseId, status, decisions, onSaved }: Props) {
               <input type="radio" name="decision" value={o.value} checked={decision === o.value} onChange={() => setDecision(o.value)} />
               <span>
                 <strong>{o.label}</strong>
-                <span className="muted small"> {o.help}</span>
+                <span className="muted small radio-help">{o.help}</span>
               </span>
             </label>
           ))}
@@ -119,10 +120,11 @@ export function DecisionPanel({ caseId, status, decisions, onSaved }: Props) {
   );
 }
 
-const ACTOR: Record<AuditEvent["actor_type"], { icon: string; label: string }> = {
-  SYSTEM: { icon: "⚙", label: "System" },
-  AI: { icon: "✦", label: "AI (advisory)" },
-  HUMAN: { icon: "\u{1F464}", label: "Human" },
+// Same markers as the overview's activity feed.
+const ACTOR: Record<AuditEvent["actor_type"], { icon: ReactNode; label: string }> = {
+  SYSTEM: { icon: <IconRefresh size={14} />, label: "System" },
+  AI: { icon: <IconSparkle size={14} />, label: "AI (advisory)" },
+  HUMAN: { icon: <IconUser size={14} />, label: "Analyst" },
 };
 
 function describe(e: AuditEvent): string {

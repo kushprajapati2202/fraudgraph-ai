@@ -39,7 +39,7 @@ const STEPS: Step[] = [
     route: "/",
     target: '[data-tour="dash-stats"]',
     title: "Where things stand",
-    body: "Open cases, the amount under review, how many transfers were flagged, and how many decisions analysts have recorded.",
+    body: "Open cases, the amount under review, how many transfers were flagged, and how much money your approved controls are holding.",
   },
   {
     route: "/",
@@ -179,11 +179,14 @@ export function TourProvider({ children }: { children: ReactNode }) {
   const [index, setIndex] = useState<number | null>(null);
   const [caseId, setCaseId] = useState<string | null>(null);
   const navigate = useNavigate();
+  const location = useLocation();
+  const origin = useRef("/"); // page the tour was started from; it ends back there
 
   // Steps that need a case are skipped when no case exists (e.g. right after a reset).
   const steps = useMemo(() => (caseId ? STEPS : STEPS.filter((s) => !s.route.includes("{case}"))), [caseId]);
 
   const start = useCallback(async () => {
+    origin.current = `${location.pathname}${location.search}`;
     let id: string | null = null;
     try {
       const scen = await api.scenarios();
@@ -194,12 +197,13 @@ export function TourProvider({ children }: { children: ReactNode }) {
     }
     setCaseId(id);
     setIndex(0);
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.pathname, location.search]);
 
   const close = useCallback(() => {
     markSeen();
     setIndex(null);
-    navigate("/");
+    navigate(origin.current);
   }, [navigate]);
 
   useEffect(() => {
@@ -209,7 +213,9 @@ export function TourProvider({ children }: { children: ReactNode }) {
       return () => window.clearTimeout(t);
     }
     return undefined;
-  }, [start]);
+    // Only on first load, not on every navigation.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <TourContext.Provider value={{ start: () => void start(), active: index !== null }}>
@@ -324,7 +330,9 @@ function TourOverlay({ step, index, total, caseId, onNext, onBack, onClose }: {
   useEffect(() => {
     popRef.current?.focus();
     const onKey = (e: KeyboardEvent) => {
+      const typing = (e.target as HTMLElement | null)?.closest?.("input, textarea, select, [contenteditable]");
       if (e.key === "Escape") onClose();
+      else if (typing) return;
       else if (e.key === "ArrowRight") onNext();
       else if (e.key === "ArrowLeft") onBack();
     };
@@ -349,7 +357,7 @@ function TourOverlay({ step, index, total, caseId, onNext, onBack, onClose }: {
         ref={popRef}
         className="tour-pop"
         role="dialog"
-        aria-modal="false"
+        aria-modal="true"
         aria-labelledby="tour-title"
         aria-describedby="tour-body"
         tabIndex={-1}

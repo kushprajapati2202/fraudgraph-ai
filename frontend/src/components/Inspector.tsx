@@ -36,10 +36,36 @@ export function InspectorProvider({ children }: { children: ReactNode }) {
 
 function Drawer({ target, canGoBack, onBack, onClose }: { target: Target; canGoBack: boolean; onBack: () => void; onClose: () => void }) {
   const closeRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLElement>(null);
+
+  // While open: the page behind does not scroll, and focus returns to what opened the drawer when it closes.
+  useEffect(() => {
+    const opener = document.activeElement as HTMLElement | null;
+    document.body.classList.add("drawer-open");
+    return () => {
+      document.body.classList.remove("drawer-open");
+      opener?.focus?.();
+    };
+  }, []);
+
   useEffect(() => {
     closeRef.current?.focus();
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
+      else if (e.key === "Tab" && panelRef.current) {
+        // Keep keyboard focus inside the drawer.
+        const focusable = panelRef.current.querySelectorAll<HTMLElement>('a[href], button:not([disabled]), input, select, textarea, [tabindex]:not([tabindex="-1"])');
+        if (!focusable.length) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -48,7 +74,7 @@ function Drawer({ target, canGoBack, onBack, onClose }: { target: Target; canGoB
   const title = target.kind === "evidence" ? `Evidence ${target.item.evidence_id}` : target.kind === "transaction" ? `Transaction ${target.id}` : `Account ${target.id}`;
   return (
     <div className="drawer-backdrop" onClick={onClose}>
-      <aside className="drawer" role="dialog" aria-modal="true" aria-label={title} onClick={(e) => e.stopPropagation()}>
+      <aside ref={panelRef} className="drawer" role="dialog" aria-modal="true" aria-label={title} onClick={(e) => e.stopPropagation()}>
         <header className="drawer-head">
           {canGoBack ? (
             <button className="btn btn-small btn-ghost" onClick={onBack} aria-label="Back to previous item">
@@ -56,7 +82,7 @@ function Drawer({ target, canGoBack, onBack, onClose }: { target: Target; canGoB
             </button>
           ) : null}
           <h2>{title}</h2>
-          <button ref={closeRef} className="btn btn-small btn-ghost" onClick={onClose} aria-label="Close panel">
+          <button ref={closeRef} className="btn btn-small btn-ghost" onClick={onClose} aria-label="Close panel" title="Close (Esc)">
             Close
           </button>
         </header>

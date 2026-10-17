@@ -727,3 +727,143 @@ h2 { font-size: 1.02rem; font-weight: 600; letter-spacing: -0.01em; }
 .assure-hero { display: flex; align-items: center; gap: 14px; margin-bottom: 12px; }
 .assure-kv { grid-template-columns: 1fr auto; gap: 6px 14px; font-size: 0.84rem; }
 .assure-kv dd { text-align: right; font-weight: 600; }
+
+/* ============================================================
+   UX pass: layout edges, wrapping, form rhythm, mobile
+   ============================================================ */
+html { scroll-padding-top: 84px; }
+@media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }
+
+/* Identifiers never break in the middle (CASE-3AE581, AC-393, TX-2436). */
+.id { white-space: nowrap; }
+.table td.nowrap, .table .nowrap { white-space: nowrap; }
+
+/* One control height everywhere, so text, date, number and select fields line up. */
+input:not([type="checkbox"]):not([type="radio"]):not([type="file"]), select { min-height: 38px; }
+input[type="date"], input[type="datetime-local"] { padding-top: 6px; padding-bottom: 6px; line-height: 1.2; }
+.filters .checkbox { min-height: 38px; align-self: end; }
+.field-help { display: block; font-size: 0.74rem; color: var(--muted); margin-top: 4px; }
+
+/* Account cards: control and "recently opened" chips on their own line, below the ID. */
+.acct-text { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; min-width: 0; }
+.acct-text .chip-row { margin-top: 2px; }
+
+/* Decision options: label on one line, explanation underneath. */
+.radio-card .radio-help { display: block; margin-top: 2px; }
+
+/* Transfer timeline: signal chips stay on one line each. */
+.table .chip-button.signal-chip { white-space: nowrap; }
+.amount-cell { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+
+/* Collapsed duplicate feed entries. */
+.feed-repeat { font-size: 0.7rem; font-weight: 700; color: var(--muted); background: var(--surface-2); border-radius: 999px; padding: 0 7px; margin-left: 6px; }
+
+/* Empty / not-found states. */
+.not-found { padding: 56px 24px; }
+.not-found h1 { margin-top: 6px; color: var(--text); }
+.empty-steps { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+.empty-steps li { display: grid; grid-template-columns: 28px 1fr; gap: 10px; align-items: start; font-size: 0.86rem; color: var(--text-2); }
+.empty-steps .step-num { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; font: 600 0.78rem var(--font-display); background: var(--accent-soft); color: var(--accent); }
+.saved-hint { font-size: 0.78rem; color: var(--low); font-weight: 600; }
+
+/* Search results: keyboard highlight follows the mouse and arrow keys. */
+.search-item[aria-selected="true"] { background: var(--accent-soft); }
+
+/* Scenario outcomes with more than one case. */
+.case-links { display: flex; flex-direction: column; gap: 2px; align-items: flex-start; }
+
+/* ---------- Mobile ---------- */
+@media (max-width: 960px) {
+  .app-shell { grid-template-columns: minmax(0, 1fr); }
+  .brand-name { white-space: nowrap; }
+  .topbar { flex-wrap: wrap; position: static; }
+  .topbar-tools { gap: 6px; }
+  .stats { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+  .stat { border-bottom: 1px solid var(--border); }
+}
+@media (max-width: 640px) {
+  .search { order: 2; flex-basis: 100%; max-width: none; }
+  .topbar-tools { margin-left: 0; width: 100%; justify-content: flex-end; }
+  .tour-btn-label, .user-chip-name { display: none; }
+  .user-chip { padding: 3px; }
+  .container { padding: 14px 12px 32px; }
+  h1 { font-size: 1.4rem; }
+  .kpis { grid-template-columns: 1fr 1fr; gap: 10px; }
+  .kpi { padding: 12px 14px; }
+  .kpi-value { font-size: 1.6rem; }
+  .kpi-label { font-size: 0.72rem; }
+  .kpi-icon { display: none; }
+  .page-head > .row-center, .page-head > form { width: 100%; }
+  .case-hero { gap: 12px; }
+  .case-hero-side { max-width: none; }
+  .flow-stage, .flow-total { min-width: 0; flex: 1 1 100%; }
+  .flow-names { max-width: none; }
+  .graph-tools { top: 8px; right: 8px; }
+  .graph-hero { padding: 14px; }
+  .mix-legend { gap: 4px; }
+  .acct-list { grid-template-columns: 1fr; }
+  .drawer-body { padding: 14px; }
+}
+.search-hint { padding: 8px 10px 4px; border-top: 1px solid var(--border); margin-top: 4px; display: flex; gap: 4px; align-items: center; flex-wrap: wrap; }
+.search-input input { min-height: 36px; }
+input[type="search"]::-webkit-search-cancel-button { cursor: pointer; }
+body.drawer-open { overflow: hidden; }
+@media (max-width: 960px) {
+  /* Stacked layout: the nav bar keeps its natural height; the page takes the rest. */
+  .app-shell { grid-template-rows: auto 1fr; }
+  .sidebar { -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 28px), transparent); padding-right: 28px; }
+}
+@media (max-width: 640px) {
+  .brand > span:last-child { display: none; }
+  .brand { padding-right: 4px; }
+}
+@media (max-width: 640px) {
+  .flow-stage, .flow-total { flex: 1 1 calc(50% - 5px); }
+}
+
+/* ---------- Accent top edges ----------
+   Drawn as a 2px top border on an overlay that shares the card's radius, so the line follows the rounded
+   corners and tapers into them instead of sitting as a straight bar across the curve. */
+.kpi { overflow: visible; }
+.kpi::after, .ai-card::before, .spotlight::before {
+  content: ""; position: absolute; inset: -1px; height: auto; left: -1px; right: -1px; top: -1px;
+  border-radius: inherit; padding-top: 2px; pointer-events: none; opacity: 1;
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+}
+.kpi::after { background: linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 0%, transparent) 75%); }
+.ai-card::before { background: linear-gradient(90deg, var(--ai), var(--accent)); }
+.spotlight::before { background: linear-gradient(90deg, var(--high), var(--accent)); }
+
+/* ---------- Collapsible sidebar ---------- */
+.app-shell { --side-cur: var(--side-w); transition: grid-template-columns 0.2s ease; }
+.app-shell.side-collapsed { --side-cur: 68px; grid-template-columns: var(--side-cur) minmax(0, 1fr); }
+.side-toggle {
+  position: fixed; top: calc(50vh - 12px); left: calc(var(--side-cur) - 12px); z-index: 30; width: 24px; height: 24px; padding: 0;
+  display: grid; place-items: center; border-radius: 50%; cursor: pointer;
+  background: var(--side-bg); color: var(--side-muted); border: 1px solid var(--side-border); box-shadow: var(--shadow);
+  opacity: 0; pointer-events: none; transition: opacity 0.15s ease, left 0.2s ease, color 0.15s ease;
+}
+.side-toggle svg { transform: scaleX(-1); }
+.side-collapsed .side-toggle svg { transform: none; }
+.sidebar:hover + .side-toggle, .side-toggle:hover, .side-toggle:focus-visible { opacity: 1; pointer-events: auto; }
+.side-toggle:hover { color: var(--side-heading); border-color: var(--accent); }
+.side-collapsed .sidebar { padding-left: 10px; padding-right: 10px; overflow-x: hidden; }
+.side-collapsed .side-label,
+.side-collapsed .side-version { display: none; }
+.side-collapsed .brand { justify-content: center; padding: 2px 0 16px; }
+.side-collapsed .side-section { font-size: 0; padding: 0; margin: 10px 8px; height: 1px; background: var(--side-border); }
+.side-collapsed .side-link { justify-content: center; padding: 10px 0; }
+.side-collapsed .side-link.active::before { left: -10px; }
+.side-collapsed .side-foot { padding: 12px 0 0; align-items: center; }
+.side-collapsed .env-badge { justify-content: center; padding: 9px; }
+@media (prefers-reduced-motion: reduce) { .app-shell, .side-toggle { transition: none; } }
+@media (max-width: 960px) {
+  /* Stacked layout already shows a compact top bar; the toggle does not apply there. */
+  .app-shell.side-collapsed { grid-template-columns: 1fr; }
+  .side-collapsed .side-label { display: inline; }
+  .side-collapsed .side-link { padding: 8px 10px; }
+  .side-collapsed .brand-tag { display: none; }
+  .side-toggle { display: none; }
+}

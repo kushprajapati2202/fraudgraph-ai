@@ -204,7 +204,7 @@ function ControlledTransferItem({ transfer: t, caseId, onChanged }: { transfer: 
           </button>
         </div>
         <div className="muted small" style={{ marginTop: 2 }}>
-          {t.status === "FLAGGED" ? "Flagged" : "Stopped"} {fmtTime(t.created_at)} UTC &middot; <span className="mono">{t.account_id}</span>{" "}
+          {t.status === "FLAGGED" ? "Flagged" : "Stopped"} {fmtTime(t.created_at)} UTC &middot; <span className="mono id">{t.account_id}</span>{" "}
           {t.control === "HOLD_FOR_REVIEW" ? "is on hold" : "is under enhanced monitoring"}
         </div>
         {t.resolved_by ? (
@@ -485,7 +485,7 @@ export function ActionsPanel({ detail, onChanged }: Props) {
                   {m.target ? (
                     <span className="muted" style={{ fontWeight: 400 }}>
                       {" "}
-                      for {nameOf(m.target)} <span className="mono small">{m.target}</span>
+                      for {nameOf(m.target)} <span className="mono small id">{m.target}</span>
                     </span>
                   ) : null}
                 </div>
@@ -510,7 +510,12 @@ export function ActionsPanel({ detail, onChanged }: Props) {
             <div className="action-main">
               <div className="action-title">
                 {labelOf(a.action_code)}
-                {a.target_account ? <span className="muted" style={{ fontWeight: 400 }}> for {nameOf(a.target_account)}</span> : null}
+                {a.target_account ? (
+                  <span className="muted" style={{ fontWeight: 400 }}>
+                    {" "}
+                    for {nameOf(a.target_account)} <span className="mono small id">{a.target_account}</span>
+                  </span>
+                ) : null}
               </div>
               <div className="small" style={{ marginTop: 4 }}>
                 <span className={`chip ${a.source === "AI" ? "chip-ai" : ""}`} style={{ marginLeft: 0 }}>

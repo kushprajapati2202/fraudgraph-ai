@@ -20,6 +20,12 @@ interface Props {
 }
 
 type Band = "high" | "medium" | "low" | "none";
+
+// Label sizes in graph units, and the smallest on-screen size they may shrink to when the view is zoomed out.
+const NODE_FONT = 12;
+const EDGE_FONT = 10.5;
+const MIN_NODE_PX = 10.5;
+const MIN_EDGE_PX = 9.5;
 const BAND_ICON: Record<Band, string> = { high: "▲ ", medium: "◆ ", low: "", none: "" };
 
 function bandOf(score: number | null | undefined): Band {
@@ -178,7 +184,7 @@ export default function NetworkGraph({ data, highlightTxIds = [], height = 480, 
             "border-color": c.border,
             label: "data(label)",
             "font-family": "Inter, system-ui, sans-serif",
-            "font-size": 11,
+            "font-size": NODE_FONT,
             "font-weight": 600,
             "text-wrap": "wrap",
             "line-height": 1.3,
@@ -211,7 +217,7 @@ export default function NetworkGraph({ data, highlightTxIds = [], height = 480, 
             "line-cap": "round",
             label: "data(label)",
             "font-family": "Inter, system-ui, sans-serif",
-            "font-size": 10,
+            "font-size": EDGE_FONT,
             "font-weight": 700,
             color: c.text,
             "text-background-color": c.surface,
@@ -308,6 +314,22 @@ export default function NetworkGraph({ data, highlightTxIds = [], height = 480, 
       setTip(null);
     });
     cy.on("pan zoom", () => setTip(null));
+
+    // Keep labels legible when a large network is fitted into the canvas: below a zoom level, labels grow in
+    // graph units so they never render smaller than MIN_*_PX on screen.
+    let lastScale = 0;
+    const scaleLabels = () => {
+      const z = cy.zoom();
+      const scale = Math.round(Math.max(1, MIN_NODE_PX / (NODE_FONT * z)) * 20) / 20;
+      if (scale === lastScale) return;
+      lastScale = scale;
+      cy.batch(() => {
+        cy.nodes().style("font-size", NODE_FONT * scale);
+        cy.edges().style("font-size", Math.max(EDGE_FONT, MIN_EDGE_PX / z));
+      });
+    };
+    scaleLabels();
+    cy.on("zoom", scaleLabels);
     cy.on("tap", "edge", (evt) => handlers.current.onEdgeClick?.(evt.target.id()));
     cy.on("tap", "node", (evt) => handlers.current.onNodeClick?.(evt.target.id()));
     cyRef.current = cy;

@@ -5,11 +5,27 @@ import { ActivityChart, BandMix, HBars } from "../components/charts";
 import { Empty, ErrorState, Loading, ScoreRing, StatusChip } from "../components/common";
 import { IconCases, IconChevron, IconFlow, IconLock, IconRefresh, IconSparkle, IconTransactions, IconUser } from "../components/icons";
 import { usePrefs } from "../prefs";
-import { caseHeadline, errorMessage, fmtAmount, fmtCompact, fmtTime, plural, useAsync } from "../util";
+import { caseHeadline, errorMessage, fmtAmount, fmtCompact, fmtTime, plural, useAsync, usePageTitle } from "../util";
 
-function greeting(): string {
+function greeting(name: string): string {
   const h = new Date().getHours();
-  return h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening";
+  const hello = h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening";
+  const first = name.trim().split(/\s+/)[0];
+  // "Analyst" is the placeholder until a name is set in Settings; don't greet the placeholder.
+  return first && first !== "Analyst" ? `${hello}, ${first}` : hello;
+}
+
+type FeedEvent = AuditEvent & { title: string | null };
+
+/** Consecutive identical entries (e.g. repeated retries that failed the same way) are shown once with a count. */
+function collapseRepeats(events: FeedEvent[]): { event: FeedEvent; count: number }[] {
+  const out: { event: FeedEvent; count: number }[] = [];
+  events.forEach((e) => {
+    const prev = out[out.length - 1];
+    if (prev && prev.event.case_id === e.case_id && prev.event.actor_type === e.actor_type && activityText(prev.event) === activityText(e)) prev.count += 1;
+    else out.push({ event: e, count: 1 });
+  });
+  return out;
 }
 
 const DECISION_TEXT: Record<string, string> = {
@@ -18,7 +34,7 @@ const DECISION_TEXT: Record<string, string> = {
   REQUEST_MORE_EVIDENCE: "requested more evidence on",
 };
 
-function activityText(e: AuditEvent & { title: string | null }): string {
+function activityText(e: FeedEvent): string {
   const p = e.event_payload;
   switch (e.event_type) {
     case "ANALYST_DECISION":
@@ -57,6 +73,7 @@ export default function DashboardPage() {
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  usePageTitle("Overview");
 
   async function run() {
     setBusy(true);
@@ -83,9 +100,7 @@ export default function DashboardPage() {
     <div className="stack">
       <div className="page-head">
         <div>
-          <h1>
-            {greeting()}, {analystName.split(" ")[0]}
-          </h1>
+          <h1>{greeting(analystName)}</h1>
           <p className="muted">
             {t.open_cases > 0 ? (
               <>
@@ -204,7 +219,7 @@ export default function DashboardPage() {
                       <span className="queue-meta">
                         <span>from {c.origin_name ?? "unknown origin"}</span>
                         <span>{plural(c.account_count, "account")} &middot; {plural(c.transaction_count, "transfer")}</span>
-                        <span>{fmtTime(c.first_activity)}</span>
+                        <span className="nowrap">{fmtTime(c.first_activity)} UTC</span>
                       </span>
                     </span>
                     <span className="queue-amount">
@@ -225,7 +240,7 @@ export default function DashboardPage() {
           </div>
           {d.recent_activity.length === 0 ? <p className="muted">No activity yet.</p> : null}
           <ul className="feed">
-            {d.recent_activity.map((e) => (
+            {collapseRepeats(d.recent_activity).map(({ event: e, count }) => (
               <li key={e.event_id} className={`feed-${e.actor_type.toLowerCase()}`}>
                 <span className="feed-icon" aria-hidden="true">
                   {e.actor_type === "AI" ? <IconSparkle size={14} /> : e.actor_type === "HUMAN" ? <IconUser size={14} /> : <IconRefresh size={14} />}
@@ -233,10 +248,11 @@ export default function DashboardPage() {
                 <div>
                   <div>
                     {activityText(e)}
+                    {count > 1 ? <span className="feed-repeat" title={`${count} identical entries in a row`}>&times;{count}</span> : null}
                     {e.case_id ? (
                       <>
                         {" "}
-                        <Link to={`/cases/${e.case_id}`} className="mono small">
+                        <Link to={`/cases/${e.case_id}`} className="mono small id">
                           {e.case_id}
                         </Link>
                       </>

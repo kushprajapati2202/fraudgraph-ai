@@ -11,7 +11,7 @@ import { ActionsPanel, ReportPanel } from "../components/Mitigation";
 import SimilarCases from "../components/SimilarCases";
 import NetworkGraph from "../graph/NetworkGraph";
 import { useHealth } from "../health";
-import { caseHeadline, fmtAmount, fmtDuration, fmtTime, useAsync } from "../util";
+import { caseHeadline, fmtAmount, fmtDuration, fmtTime, useAsync, usePageTitle } from "../util";
 
 export default function CaseDetailPage() {
   const { caseId = "" } = useParams();
@@ -24,6 +24,7 @@ export default function CaseDetailPage() {
   const paths = graph.data?.paths ?? [];
   const highlight = useMemo(() => paths.find((p) => p.evidence_id === pathId)?.transaction_ids ?? [], [paths, pathId]);
   const evidenceById = useMemo(() => new Map((detail.data?.evidence ?? []).map((e) => [e.evidence_id, e])), [detail.data]);
+  usePageTitle(detail.data ? `${caseId} · ${caseHeadline(detail.data.case.title)}` : caseId);
 
   if (detail.loading && !detail.data) return <Loading label="Loading case" />;
   if (detail.error) return <ErrorState message={detail.error} onRetry={detail.reload} />;
@@ -53,7 +54,7 @@ export default function CaseDetailPage() {
             )}
           </p>
           <p className="muted small" style={{ marginTop: 4 }}>
-            <span className="mono">{c.case_id}</span> &middot; rules {c.rule_version} &middot; analysis {c.analysis_id}
+            <span className="mono id">{c.case_id}</span> &middot; {c.rule_version} &middot; analysis {c.analysis_id}
             {!c.active ? " · no longer flagged by the latest analysis" : ""}
           </p>
           <nav className="subnav" aria-label="Sections" style={{ marginTop: 10 }}>
@@ -128,15 +129,19 @@ export default function CaseDetailPage() {
                   <li key={id}>
                     <button className="acct-card" onClick={() => openAccount(id)}>
                       <Avatar name={a?.holder_name ?? id} type={a?.account_type} />
-                      <span style={{ minWidth: 0 }}>
+                      <span className="acct-text">
                         <span className="party-name">{a?.holder_name ?? "Unknown holder"}</span>
                         <span className="party-id">
-                          <span className="mono">{id}</span> &middot; {a?.city ?? "unknown"}
+                          <span className="mono id">{id}</span> &middot; {a?.city ?? "unknown"}
                         </span>
-                        <AccountControlTags controls={d.account_controls[id]} />
-                        {days !== null && days >= 0 && days <= 30 ? (
-                          <span className="chip chip-warn" style={{ marginLeft: 0, marginTop: 4 }}>
-                            opened {days} {days === 1 ? "day" : "days"} earlier
+                        {d.account_controls[id]?.length || (days !== null && days >= 0 && days <= 30) ? (
+                          <span className="chip-row">
+                            <AccountControlTags controls={d.account_controls[id]} />
+                            {days !== null && days >= 0 && days <= 30 ? (
+                              <span className="chip chip-warn" title="Account opened shortly before this activity">
+                                opened {days === 0 ? "the same day" : `${days} ${days === 1 ? "day" : "days"} earlier`}
+                              </span>
+                            ) : null}
                           </span>
                         ) : null}
                       </span>
@@ -217,8 +222,7 @@ export default function CaseDetailPage() {
                   <tr>
                     <th scope="col">Time</th>
                     <th scope="col">From &rarr; To</th>
-                    <th scope="col" className="num">Amount</th>
-                    <th scope="col">Priority</th>
+                    <th scope="col" className="num">Amount &middot; priority</th>
                     <th scope="col">Signals</th>
                   </tr>
                 </thead>
@@ -247,16 +251,18 @@ export default function CaseDetailPage() {
                           {t.source_account} &rarr; {t.destination_account} &middot; {t.channel}
                         </div>
                       </td>
-                      <td className="num" style={{ fontWeight: 650 }}>{fmtAmount(t.amount, t.currency)}</td>
-                      <td>
-                        <RiskBadge band={t.risk_band} score={t.score} />
+                      <td className="num">
+                        <span className="amount-cell">
+                          <strong>{fmtAmount(t.amount, t.currency)}</strong>
+                          <RiskBadge band={t.risk_band} score={t.score} />
+                        </span>
                       </td>
                       <td>
                         <div className="chip-row">
                           {t.signals.map((s) => {
                             const ev = evidenceById.get(`EV-SIG-${t.transaction_id}-${s.code}`);
                             return (
-                              <button key={s.code} className={`chip chip-button ${s.context_only ? "chip-context" : ""}`} onClick={() => ev && openEvidence(ev)} title={s.explanation}>
+                              <button key={s.code} className={`chip chip-button signal-chip ${s.context_only ? "chip-context" : ""}`} onClick={() => ev && openEvidence(ev)} title={s.explanation}>
                                 {s.label} +{s.contribution}
                               </button>
                             );

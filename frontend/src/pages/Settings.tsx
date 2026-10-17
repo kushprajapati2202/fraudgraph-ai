@@ -5,7 +5,7 @@ import { AiStatusCard } from "../components/AiStatus";
 import { ErrorState, Loading } from "../components/common";
 import { useHealth } from "../health";
 import { usePrefs, type Theme } from "../prefs";
-import { errorMessage, fmtTime, useAsync } from "../util";
+import { errorMessage, fmtTime, useAsync, usePageTitle } from "../util";
 
 const THEMES: { value: Theme; label: string }[] = [
   { value: "system", label: "System" },
@@ -24,6 +24,8 @@ export default function SettingsPage() {
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
+  const [nameSaved, setNameSaved] = useState(false);
+  usePageTitle("Settings");
 
   async function restore() {
     if (!window.confirm("Restore the baseline dataset?\n\nThis removes simulated transfers, cases, AI summaries and analyst decisions, then reloads the original data and re-runs analysis.")) return;
@@ -67,15 +69,30 @@ export default function SettingsPage() {
               onSubmit={(e) => {
                 e.preventDefault();
                 prefs.setAnalystName(name);
+                setNameSaved(true);
               }}
             >
               <label>
                 <span className="visually-hidden">Analyst name</span>
-                <input value={name} maxLength={60} onChange={(e) => setName(e.target.value)} style={{ width: 200 }} />
+                <input
+                  value={name}
+                  maxLength={60}
+                  placeholder="Your name"
+                  onChange={(e) => {
+                    setName(e.target.value);
+                    setNameSaved(false);
+                  }}
+                  style={{ width: 200 }}
+                />
               </label>
-              <button className="btn" type="submit" disabled={name.trim() === prefs.analystName}>
+              <button className="btn" type="submit" disabled={!name.trim() || name.trim() === prefs.analystName}>
                 Save
               </button>
+              {nameSaved ? (
+                <span className="saved-hint" role="status">
+                  ✓ Saved
+                </span>
+              ) : null}
             </form>
           </div>
           <div className="setting-row">
@@ -174,7 +191,7 @@ export default function SettingsPage() {
             </div>
           </div>
         </div>
-        {scen.loading && !scen.data ? <Loading /> : null}
+        {scen.loading && !scen.data ? <Loading label="Loading scenarios" /> : null}
         {scen.error ? <div style={{ padding: 18 }}><ErrorState message={scen.error} onRetry={scen.reload} /></div> : null}
         {scen.data ? (
           <div className="table-scroll">
@@ -202,11 +219,13 @@ export default function SettingsPage() {
                     <td className="num">{s.transaction_ids.length}</td>
                     <td>
                       {s.case_ids.length ? (
-                        s.case_ids.map((c) => (
-                          <button key={c} className="link-button mono" onClick={() => navigate(`/cases/${c}`)}>
-                            {c}
-                          </button>
-                        ))
+                        <span className="case-links">
+                          {s.case_ids.map((c) => (
+                            <button key={c} className="link-button mono id" onClick={() => navigate(`/cases/${c}`)}>
+                              {c}
+                            </button>
+                          ))}
+                        </span>
                       ) : (
                         <span className="muted">Not flagged</span>
                       )}

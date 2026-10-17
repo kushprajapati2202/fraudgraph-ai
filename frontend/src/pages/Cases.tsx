@@ -3,7 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { api } from "../api/client";
 import { Empty, ErrorState, Loading, ScoreRing, StatusChip } from "../components/common";
 import { IconSearch } from "../components/icons";
-import { caseHeadline, fmtAmount, fmtDuration, fmtTime, plural, useAsync } from "../util";
+import { caseHeadline, fmtAmount, fmtDuration, fmtTime, plural, useAsync, usePageTitle } from "../util";
 
 const STATUS_TABS = [
   { value: "", label: "All" },
@@ -20,6 +20,14 @@ export default function CasesPage() {
   const [applied, setApplied] = useState("");
   const navigate = useNavigate();
   const list = useAsync(() => api.cases({ risk_band: band || undefined, status: status || undefined, search: applied || undefined }), [band, status, applied]);
+  usePageTitle("Cases");
+  const filtered = Boolean(band || status || applied);
+  const clearFilters = () => {
+    setBand("");
+    setStatus("");
+    setSearch("");
+    setApplied("");
+  };
 
   return (
     <div className="stack">
@@ -57,7 +65,16 @@ export default function CasesPage() {
             <label className="search-input" style={{ minWidth: 240 }}>
               <IconSearch size={15} />
               <span className="visually-hidden">Search cases</span>
-              <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Case, account or transaction ID" maxLength={64} />
+              <input
+                type="search"
+                value={search}
+                onChange={(e) => {
+                  setSearch(e.target.value);
+                  if (!e.target.value.trim()) setApplied(""); // clearing the box clears the search
+                }}
+                placeholder="Case, account or transfer"
+                maxLength={64}
+              />
             </label>
             <button className="btn" type="submit">
               Search
@@ -70,7 +87,18 @@ export default function CasesPage() {
         {list.data ? (
           list.data.items.length === 0 ? (
             <div style={{ padding: "0 18px 18px" }}>
-              <Empty>No cases match these filters.</Empty>
+              {filtered ? (
+                <Empty>
+                  No cases match these filters.{" "}
+                  <button className="btn btn-small" onClick={clearFilters}>
+                    Clear filters
+                  </button>
+                </Empty>
+              ) : (
+                <Empty>
+                  No cases yet. <Link to="/">Run analysis from the overview</Link> to score transfers and build cases.
+                </Empty>
+              )}
             </div>
           ) : (
             <div className="table-scroll">
@@ -97,7 +125,7 @@ export default function CasesPage() {
                           {caseHeadline(c.title)}
                         </Link>
                         <div className="muted small">
-                          from {c.origin_name ?? "unknown origin"} &middot; <span className="mono">{c.case_id}</span>
+                          from {c.origin_name ?? "unknown origin"} &middot; <span className="mono id">{c.case_id}</span>
                         </div>
                       </td>
                       <td className="num" style={{ fontWeight: 650 }}>
@@ -116,11 +144,11 @@ export default function CasesPage() {
                           {c.signal_codes.length > 3 ? <span className="chip">+{c.signal_codes.length - 3}</span> : null}
                         </div>
                       </td>
-                      <td className="small">{fmtDuration(c.first_activity, c.last_activity)}</td>
+                      <td className="small nowrap">{fmtDuration(c.first_activity, c.last_activity)}</td>
                       <td>
                         <StatusChip status={c.status} />
                       </td>
-                      <td className="small">{fmtTime(c.first_activity)}</td>
+                      <td className="small nowrap tnum">{fmtTime(c.first_activity)}</td>
                     </tr>
                   ))}
                 </tbody>

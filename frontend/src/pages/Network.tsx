@@ -4,7 +4,7 @@ import { api } from "../api/client";
 import { Empty, ErrorState, Loading } from "../components/common";
 import { useInspector } from "../components/Inspector";
 import NetworkGraph from "../graph/NetworkGraph";
-import { useAsync } from "../util";
+import { useAsync, usePageTitle } from "../util";
 
 export default function NetworkPage() {
   const [params, setParams] = useSearchParams();
@@ -22,6 +22,7 @@ export default function NetworkPage() {
   }
 
   const focusName = focus ? graph.data?.nodes.find((n) => n.id === focus)?.holder_name : null;
+  usePageTitle(focus ? `Network · ${focus}` : "Network");
 
   return (
     <div className="stack">
@@ -42,9 +43,11 @@ export default function NetworkPage() {
         <form className="row-center" onSubmit={submit}>
           <label className="inline">
             <span className="label" style={{ margin: 0 }}>Account ID</span>
-            <input value={account} onChange={(e) => setAccount(e.target.value)} placeholder="AC-101" style={{ width: 120 }} />
+            <input value={account} onChange={(e) => setAccount(e.target.value)} placeholder="AC-101" style={{ width: 120 }} maxLength={12} />
           </label>
-          <button className="btn btn-primary" type="submit">Focus</button>
+          <button className="btn btn-primary" type="submit" disabled={!account.trim() && !focus}>
+            Focus
+          </button>
           {focus ? (
             <button className="btn" type="button" onClick={() => setParams({})}>
               Show flagged network
@@ -57,7 +60,17 @@ export default function NetworkPage() {
       {graph.data ? (
         <section className="card">
           {graph.data.edges.length === 0 ? (
-            <Empty>No transfers to show yet. Run analysis from the overview.</Empty>
+            focus ? (
+              <Empty>
+                No transfers found for <span className="mono id">{focus}</span>. Check the account ID, or{" "}
+                <button className="link-button" onClick={() => setParams({})}>
+                  show the flagged network
+                </button>
+                .
+              </Empty>
+            ) : (
+              <Empty>No flagged transfers to show yet. Run analysis from the overview.</Empty>
+            )
           ) : (
             <NetworkGraph
               data={graph.data}

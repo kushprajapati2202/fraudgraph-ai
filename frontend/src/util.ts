@@ -94,6 +94,13 @@ export function useAsync<T>(fn: () => Promise<T>, deps: unknown[]): AsyncState<T
   return { data, error, loading, reload, setData };
 }
 
+/** Sets the browser tab title for the current page. */
+export function usePageTitle(title: string | null | undefined): void {
+  useEffect(() => {
+    document.title = title ? `${title} · FraudGraph AI` : "FraudGraph AI";
+  }, [title]);
+}
+
 export function readCssVar(name: string, fallback: string): string {
   const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
   return v || fallback;

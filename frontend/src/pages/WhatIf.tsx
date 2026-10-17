@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { api, type AnalysisRun, type TransactionDetail } from "../api/client";
 import { ControlTag, ErrorState, RiskBadge } from "../components/common";
 import { useInspector } from "../components/Inspector";
-import { errorMessage, useAsync } from "../util";
+import { errorMessage, useAsync, usePageTitle } from "../util";
 
 interface Form {
   source_account: string;
@@ -25,6 +25,7 @@ export default function WhatIfPage() {
   const [added, setAdded] = useState<TransactionDetail | null>(null);
   const [run, setRun] = useState<AnalysisRun | null>(null);
   const { openTransaction } = useInspector();
+  usePageTitle("Simulator");
 
   const set = (k: keyof Form) => (e: { target: { value: string } }) => setForm({ ...form, [k]: e.target.value });
 
@@ -98,10 +99,24 @@ export default function WhatIfPage() {
           {scen.data?.suggested_what_if ? <p className="muted small">Suggestion: {scen.data.suggested_what_if.label}.</p> : null}
           {scen.error ? <ErrorState message={scen.error} onRetry={scen.reload} /> : null}
           <div className="form-grid">
-            <label><span className="label">Source account</span><input required value={form.source_account} onChange={set("source_account")} placeholder="AC-101" pattern="[Aa][Cc]-\d{3,4}" /></label>
-            <label><span className="label">Destination account</span><input required value={form.destination_account} onChange={set("destination_account")} placeholder="AC-901 (AC-900 to 999 creates a new beneficiary)" pattern="[Aa][Cc]-\d{3,4}" /></label>
-            <label><span className="label">Amount (INR)</span><input required type="number" min={1} max={10000000} step="0.01" value={form.amount} onChange={set("amount")} /></label>
-            <label><span className="label">Timestamp</span><input type="datetime-local" value={form.timestamp} onChange={set("timestamp")} /></label>
+            <label>
+              <span className="label">Source account</span>
+              <input required value={form.source_account} onChange={set("source_account")} placeholder="AC-101" pattern="[Aa][Cc]-\d{3,4}" title="Account ID such as AC-101" />
+            </label>
+            <label>
+              <span className="label">Destination account</span>
+              <input required value={form.destination_account} onChange={set("destination_account")} placeholder="AC-901" pattern="[Aa][Cc]-\d{3,4}" title="Account ID such as AC-901" />
+              <span className="field-help">AC-900 to AC-999 act as a brand-new beneficiary.</span>
+            </label>
+            <label>
+              <span className="label">Amount (₹)</span>
+              <input required type="number" inputMode="decimal" min={1} max={10000000} step="0.01" placeholder="e.g. 56000" value={form.amount} onChange={set("amount")} />
+            </label>
+            <label>
+              <span className="label">Timestamp</span>
+              <input type="datetime-local" value={form.timestamp} onChange={set("timestamp")} />
+              <span className="field-help">Leave empty to place it 5 minutes after the latest transfer.</span>
+            </label>
             <label>
               <span className="label">Channel</span>
               <select value={form.channel} onChange={set("channel")}>
@@ -119,7 +134,27 @@ export default function WhatIfPage() {
 
         <section className="card" aria-live="polite" aria-labelledby="result-heading">
           <div className="card-head"><h2 id="result-heading">What changed</h2></div>
-          {!run ? <p className="muted">Results of the before/after comparison appear here.</p> : null}
+          {!run && !busy && !added ? (
+            <ol className="empty-steps">
+              <li>
+                <span className="step-num">1</span>
+                <span>Describe a transfer on the left, or use the suggested one.</span>
+              </li>
+              <li>
+                <span className="step-num">2</span>
+                <span>It is scored with the live rules. If an account is on hold, the transfer is stopped before it moves.</span>
+              </li>
+              <li>
+                <span className="step-num">3</span>
+                <span>Analysis re-runs and this panel shows which cases and signals changed, before and after.</span>
+              </li>
+            </ol>
+          ) : null}
+          {busy ? (
+            <div className="state state-loading" role="status">
+              <span className="spinner" aria-hidden="true" /> {added ? "Re-running analysis..." : "Adding the simulated transfer..."}
+            </div>
+          ) : null}
           {added ? (
             <p>
               Added{" "}
@@ -162,12 +197,12 @@ export default function WhatIfPage() {
               <ul className="plain">
                 {diff.new_cases.map((c) => (
                   <li key={c.case_id}>
-                    <span className="chip">new</span> <Link to={`/cases/${c.case_id}`}>{c.case_id}</Link> <RiskBadge band={c.risk_band} score={c.risk_score} /> {c.title}
+                    <span className="chip">new</span> <Link to={`/cases/${c.case_id}`} className="id">{c.case_id}</Link> <RiskBadge band={c.risk_band} score={c.risk_score} /> {c.title}
                   </li>
                 ))}
                 {diff.updated_cases.map((c) => (
                   <li key={c.case_id}>
-                    <span className="chip">updated</span> <Link to={`/cases/${c.case_id}`}>{c.case_id}</Link> score {c.score_before} &rarr; {c.score_after}
+                    <span className="chip">updated</span> <Link to={`/cases/${c.case_id}`} className="id">{c.case_id}</Link> score {c.score_before} &rarr; {c.score_after}
                     {c.added_transaction_ids.length ? <> &middot; added {c.added_transaction_ids.join(", ")}</> : null}
                   </li>
                 ))}
