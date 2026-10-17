@@ -22,6 +22,14 @@ class Settings(BaseSettings):
     gemini_fallback_models: str = "gemini-flash-latest,gemini-3.1-flash-lite,gemini-flash-lite-latest"
     gemini_timeout_seconds: float = 30.0
     gemini_embedding_model: str = "gemini-embedding-001"  # used for "similar cases"
+    # Google Cloud integrations. Each one is off until its setting is present, so local runs and tests need none.
+    gcs_state_bucket: str | None = None  # Cloud Storage bucket holding the SQLite snapshot (state survives restarts)
+    bigquery_dataset: str | None = None  # BigQuery dataset for the analytics mirror, e.g. "fraudgraph"
+    bigquery_location: str = "US"
+    pubsub_topic: str | None = None  # topic id for incoming transfers, e.g. "fraudgraph-transfers"
+    pubsub_push_token: str | None = None  # shared secret on the push subscription URL (?token=...)
+    docai_processor: str | None = None  # projects/<p>/locations/us/processors/<id> (Invoice or Expense parser)
+    vertex_search_serving_config: str | None = None  # .../dataStores/<id>/servingConfigs/default_search
     demo_token: str | None = None
     db_path: str | None = None
     data_dir: str = str(ROOT / "data")

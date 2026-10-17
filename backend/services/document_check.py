@@ -11,7 +11,9 @@ import base64
 import binascii
 import hashlib
 import json
+import logging
 import re
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date
 from difflib import SequenceMatcher
 from typing import Literal
@@ -20,6 +22,9 @@ from pydantic import BaseModel, ValidationError
 
 from backend.config import settings
 from backend.services import gemini_service
+
+logger = logging.getLogger("fraudgraph.documents")
+_POOL = ThreadPoolExecutor(max_workers=2, thread_name_prefix="docai")
 
 MAX_BYTES = 4 * 1024 * 1024
 ALLOWED_MIME = {"image/png", "image/jpeg", "image/webp", "application/pdf"}
@@ -200,6 +205,10 @@ def analyse(raw: bytes, mime_type: str, tx: dict, source_name: str | None, desti
     """Extract with Gemini (multimodal), then compare in code. Returns an OK or UNAVAILABLE response dict."""
     prompt = ("Extract the fields of this supporting document into the JSON schema. "
               "It was submitted to explain a bank transfer; do not assume it is genuine.")
+    from backend.services import docai
+
+    # Document AI reads the same file in parallel as an independent second reader.
+    second = _POOL.submit(docai.process, raw, mime_type) if docai.enabled() else None
     for attempt in range(2):
         try:
             text = gemini_service.generate_json(DOCUMENT_SYSTEM_PROMPT, prompt, DocumentExtractionSchema,
@@ -219,12 +228,35 @@ def analyse(raw: bytes, mime_type: str, tx: dict, source_name: str | None, desti
             extraction[key] = [str(x).strip()[:300] for x in extraction[key][:8] if str(x).strip()]
         extraction["regions"] = clean_regions(extraction["regions"]) if mime_type != "application/pdf" else []
         checks = compare(extraction, tx, source_name, destination_name)
-        return {"status": "OK", "model": gemini_service._model_used.get() or settings.gemini_model,
-                "prompt_version": gemini_service.PROMPT_VERSION, "extraction": extraction, "checks": checks,
-                "verdict": verdict(extraction, checks)}
+        result = {"status": "OK", "model": gemini_service._model_used.get() or settings.gemini_model,
+                  "prompt_version": gemini_service.PROMPT_VERSION, "extraction": extraction, "checks": checks,
+                  "verdict": verdict(extraction, checks)}
+        if second is not None:
+            result["second_reader"] = _second_reader(second, extraction, result)
+        return result
     return {"status": "UNAVAILABLE", "reason": "INVALID_SCHEMA", "detail": None,
             "message": gemini_service.UNAVAILABLE_MESSAGES["INVALID_SCHEMA"], "model": settings.gemini_model,
             "prompt_version": gemini_service.PROMPT_VERSION}
+
+
+def _second_reader(future, extraction: dict, result: dict) -> dict:
+    """Compare Gemini's reading with Document AI's and lower a SUPPORTS verdict when they disagree."""
+    from backend.services import docai
+
+    try:
+        found = future.result(timeout=35)
+    except Exception as exc:
+        logger.warning("Document AI read failed: %s", exc)
+        return {"status": "UNAVAILABLE", "reader": "Document AI", "detail": type(exc).__name__}
+    rows = docai.compare(extraction, found)
+    adjusted, note = docai.adjust_verdict(result["verdict"], rows)
+    if adjusted != result["verdict"]:
+        result["verdict_before_cross_check"] = result["verdict"]
+        result["verdict"] = adjusted
+    return {"status": "OK", "reader": "Document AI", "processor": (settings.docai_processor or "").split("/")[-1],
+            "fields": rows, "note": note, "confidence": found.get("confidence", {}),
+            "agreed": sum(r["agreement"] == "AGREE" for r in rows),
+            "disagreed": sum(r["agreement"] == "DISAGREE" for r in rows)}
 
 
 def sha256(raw: bytes) -> str:

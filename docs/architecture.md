@@ -15,10 +15,36 @@ FastAPI (backend/main.py)  - Pydantic validation, error envelope, request IDs, S
    |     analysis.py        orchestration: score -> cases -> evidence -> diff -> audit
    |     gemini_service.py  bounded evidence package -> Gemini JSON -> schema + citation validation
    |     audit.py           append-only audit events (SYSTEM / AI / HUMAN)
+   |     state_sync.py      SQLite snapshot <-> Cloud Storage (restore on start, debounced save after writes)
+   |     bigquery_sync.py   analytics mirror in BigQuery (free load jobs, 15 s after changes)
+   |     bigquery_ask.py    Gemini writes GoogleSQL -> static guard -> BigQuery dry run -> capped execution
+   |     bigquery_ml.py     feature view -> BOOSTED_TREE_CLASSIFIER -> ML.EXPLAIN_PREDICT -> ml_scores
+   |     pubsub_stream.py   publish transfers; push handler is idempotent and scores on arrival
+   |     docai.py           Document AI invoice parser as second reader; field-by-field agreement
+   |     policy_search.py   Vertex AI Search passages POL-n -> Gemini guidance with citation allow-list
    |-- prompts/system_v1.txt
    v
-SQLite (DB_PATH; /tmp on Cloud Run)         Gemini API (google-genai SDK; key from Secret Manager)
+SQLite (/tmp, snapshot in Cloud Storage)     Gemini on Vertex AI (service account, no key)
 ```
+
+## Google Cloud data flow
+
+```
+            publish                push (token)              record + controls + rescore
+Simulator ----------> Pub/Sub topic ----------> Cloud Run /api/cloud/stream/push ----------> SQLite
+                                                     |                                       |
+                                                     | 15 s debounce, load jobs              | after each write
+                                                     v                                       v
+                                         BigQuery dataset `fraudgraph`             Cloud Storage snapshot
+                                           |-- transfers, cases, accounts, decisions, mitigation_actions, labels
+                                           |-- ml_features (view) -> mule_risk_model (BQML) -> ML.EXPLAIN_PREDICT
+                                           '-- Ask BigQuery: Gemini SQL, dry-run gated, 200 MB cap
+Document upload -> Gemini (vision) ---+--> code compares the two readings --> verdict (lowered on disagreement)
+                -> Document AI -------'
+Case -> Vertex AI Search (policy library) -> passages POL-n -> Gemini steps citing POL-n (allow-list checked)
+```
+
+Every Google Cloud integration is optional and off until its setting is present, so local development and the 107 automated tests need no cloud account.
 
 ## Analysis flow
 1. `POST /api/analysis/run` loads every transaction and scores each one with `risk_engine.assess_all`. The engine is pure, so the same input always gives the same output.
@@ -43,10 +69,12 @@ SQLite (DB_PATH; /tmp on Cloud Run)         Gemini API (google-genai SDK; key fr
 6. Each AI call writes an `AI_*` audit event with the model, prompt version, status and the number of removed IDs. It never logs the key.
 
 ## Persistence
-SQLite keeps setup to zero. On Cloud Run it runs with `--max-instances=1`, and the database lives in `/tmp`, which is ephemeral by design. Startup and `POST /api/demo/reset` restore the identical ds-v1 baseline. If you need durable state across restarts, replace `backend/db.py` with Firestore.
+SQLite is the system of record and keeps local setup to zero. On Cloud Run it runs with `--max-instances=1` in `/tmp`; after every successful write request a consistent copy (SQLite online backup API) is uploaded to Cloud Storage two seconds after the last change, and on shutdown any pending change is flushed. On start the service restores the latest snapshot before checking the schema, so decisions, controls and documents survive restarts and redeploys. BigQuery is a read-only analytical copy, never written back. To run more than one instance, move `backend/db.py` to Cloud SQL for PostgreSQL.
 
 ## Security notes
 - All SQL uses bound parameters. Sort columns come from an allow-list, and LIKE wildcards are escaped.
-- When `DEMO_TOKEN` is set, `POST /api/demo/reset` and `POST /api/transactions/demo` require `X-Demo-Token`.
+- When `DEMO_TOKEN` is set, `POST /api/demo/reset` and `POST /api/transactions/demo` require `X-Demo-Token`, as do Pub/Sub publishing, the BigQuery sync and model training.
+- Gemini-written SQL runs only after a static guard (one read-only SELECT, allow-listed tables, no comments, DDL, DML or scripting) and a BigQuery dry run that checks the statement type, every referenced table and the bytes scanned; execution is capped by `maximum_bytes_billed`. If the dry run rejects a query, the error goes back to Gemini once for a repair. Numbers in the written answer must appear in the result rows.
+- The Pub/Sub push endpoint requires a secret token, acknowledges malformed messages instead of retrying them forever, and is idempotent: the transfer ID is reserved at publish time, so a redelivery is recorded as a duplicate.
 - Errors use the `{"error": {code, message, details}}` envelope. Unhandled errors return a request ID and no stack trace.
 - `/api/health` reports only whether Gemini is configured, never the key.

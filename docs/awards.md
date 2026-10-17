@@ -6,8 +6,8 @@ This is a working checklist for the team, mapping what is built to each prize. C
 
 | Award | Where the project stands | Still to do (team) |
 |---|---|---|
-| Winner / runners-up | Complete end-to-end product with 65 automated tests and measured results | Deploy, record the video, write the proposal |
-| Best use of Google Cloud AI tools | Five distinct Gemini uses (including vision and embeddings), Vertex AI and Cloud Run support | Deploy on Cloud Run in Vertex AI mode and confirm it works |
+| Winner / runners-up | Complete end-to-end product with 107 automated tests and measured results | Deploy, record the video, write the proposal |
+| Best use of Google Cloud AI tools | Many distinct Gemini uses (vision, embeddings, SQL writing, grounded policy guidance) plus BigQuery, BigQuery ML, Pub/Sub, Document AI, Vertex AI Search, Cloud Storage and Cloud Run | Deploy with `scripts/deploy.sh` and confirm each service on `/api/cloud/status` |
 | Most Impactful Solution | Covers detect, explain, verify documents, mitigate and document | Add one impact number from a real analyst if you can |
 | Best UI/UX | Redesigned console, verified in light and dark themes | Click through once; check the tour and a phone-width view |
 | Social Choice Award | Sharing kit prepared in [social.md](social.md) | Publish the demo and video, then gather votes |
@@ -23,7 +23,13 @@ This is a working checklist for the team, mapping what is built to each prize. C
 | Gemini embeddings | "Similar resolved cases": each case is described without names or IDs, embedded with `gemini-embedding-001`, and ranked against an archive of resolved cases. The score blends embedding similarity (60%) with rule-signal overlap (40%). | `backend/services/similarity.py` |
 | Constrained recommendations | The model may only pick mitigation actions from an 8-item catalogue, on accounts in the case | `backend/services/mitigation.py` |
 | Model fallback chain | Four Gemini models tried in order, with a second pass on overload | `gemini_service.generate_json` |
-| Vertex AI | Optional backend using the Cloud Run service account, with no API key | `backend/config.py`, `scripts/deploy.sh` |
+| Vertex AI | Gemini through the Cloud Run service account, with no API key | `backend/config.py`, `scripts/deploy.sh` |
+| BigQuery + Gemini | *Ask BigQuery*: Gemini writes GoogleSQL; a static guard and a BigQuery dry run gate it, a rejected query goes back to Gemini once for repair, and numbers in the answer are checked against the rows | `backend/services/bigquery_ask.py` |
+| BigQuery ML | Boosted-tree model on behavioural features; `ML.EXPLAIN_PREDICT` attributions shown next to the rule score | `backend/services/bigquery_ml.py` |
+| Pub/Sub | Event-driven ingest; push delivery is token-protected, idempotent and scored on arrival with controls enforced | `backend/services/pubsub_stream.py` |
+| Document AI | Invoice parser reads each document alongside Gemini; disagreement on amount or date lowers the verdict | `backend/services/docai.py` |
+| Vertex AI Search | Policy library retrieval; Gemini's steps must cite retrieved passages (allow-list checked) | `backend/services/policy_search.py`, `policies/` |
+| Cloud Storage | SQLite snapshot so state survives restarts | `backend/services/state_sync.py` |
 | Cloud Run, Cloud Build, Artifact Registry | One-container deployment | `Dockerfile`, `scripts/deploy.sh` |
 | Secret Manager, IAM | Least-privilege service account; secrets never in code | `scripts/deploy.sh` |
 | Cloud Logging | Structured JSON request logs | `backend/main.py` |
@@ -31,9 +37,10 @@ This is a working checklist for the team, mapping what is built to each prize. C
 **The point to make to judges:** the model's output is treated as untrusted until verified. Citations are checked against an allow-list, out-of-case accounts and off-catalogue actions are rejected, document fields are compared with the record by plain code, and the AI never decides or executes.
 
 **Honest gaps**
-- Vertex AI mode is implemented but has not been run. Until you deploy and see `"backend": "Vertex AI"` on `/api/ai/status`, describe it as supported, not as proven.
+- The Google Cloud integrations are built and unit-tested, but they have not yet run against a live project. Claim each one only after `/api/cloud/status` shows it active on the deployed URL.
 - The similar-cases archive is 14 synthetic precedents written by the team to cover the same patterns as the test scenarios, so the good matches are expected. Describe it as a demonstration of the technique, not as evidence it works on real case history.
-- The project does not use BigQuery, Firestore or Vertex AI Search. Don't claim them. State is still temporary SQLite.
+- The BigQuery ML model is trained on 22 suspicious synthetic transfers; quote its evaluation as a demonstration, not as accuracy. The policy library is five illustrative documents written by the team, not real regulation.
+- SQLite with a Cloud Storage snapshot means one instance; scaling out needs Cloud SQL.
 
 ## Most Impactful Solution
 

@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { api, type AnalysisRun, type TransactionDetail } from "../api/client";
 import { ControlTag, ErrorState, RiskBadge } from "../components/common";
 import { useInspector } from "../components/Inspector";
+import { cloudOn, StreamFeed, useCloud } from "../components/Cloud";
 import { errorMessage, useAsync, usePageTitle } from "../util";
 
 interface Form {
@@ -25,6 +26,11 @@ export default function WhatIfPage() {
   const [added, setAdded] = useState<TransactionDetail | null>(null);
   const [run, setRun] = useState<AnalysisRun | null>(null);
   const { openTransaction } = useInspector();
+  const cloud = useCloud();
+  const pubsubOn = cloudOn(cloud, "pubsub");
+  const [viaPubSub, setViaPubSub] = useState(true);
+  const [queuedInfo, setQueuedInfo] = useState<string | null>(null);
+  const [streamKey, setStreamKey] = useState(0);
   usePageTitle("Simulator");
 
   const set = (k: keyof Form) => (e: { target: { value: string } }) => setForm({ ...form, [k]: e.target.value });
@@ -59,6 +65,29 @@ export default function WhatIfPage() {
       if (form.timestamp) body.timestamp = form.timestamp.length === 16 ? `${form.timestamp}:00` : form.timestamp;
       if (form.device_id.trim()) body.device_id = form.device_id.trim().toUpperCase();
       if (form.description.trim()) body.description = form.description.trim();
+      if (pubsubOn && viaPubSub) {
+        // Event-driven path: publish to Pub/Sub; the push subscription delivers it to the service, which records,
+        // enforces controls and re-scores. Wait for it to land, then show the outcome.
+        const queued = await api.streamPublish(body);
+        setQueuedInfo(`Published to ${queued.topic} as message ${queued.message_id}. Waiting for delivery…`);
+        setStreamKey((k) => k + 1);
+        const started = Date.now();
+        while (Date.now() - started < 45000) {
+          await new Promise((r) => setTimeout(r, 1500));
+          try {
+            const detail = await api.transaction(queued.transaction_id);
+            setAdded(detail);
+            setQueuedInfo(`Delivered by Pub/Sub and scored in ${((Date.now() - started) / 1000).toFixed(1)} s.`);
+            setStreamKey((k) => k + 1);
+            return;
+          } catch {
+            /* not delivered yet */
+          }
+        }
+        setQueuedInfo("Published, but not delivered yet. It will appear in the live event stream when it arrives.");
+        return;
+      }
+      setQueuedInfo(null);
       const created = await api.addSyntheticTransaction(body);
       setAdded(created);
       const analysis = await api.runAnalysis({});
@@ -126,9 +155,16 @@ export default function WhatIfPage() {
             <label><span className="label">Device ID (optional)</span><input value={form.device_id} onChange={set("device_id")} placeholder="DEV-6602" /></label>
           </div>
           <label><span className="label">Remarks (optional)</span><input value={form.description} maxLength={300} onChange={set("description")} /></label>
+          {pubsubOn ? (
+            <label className="row" style={{ gap: 8, alignItems: "center" }}>
+              <input type="checkbox" checked={viaPubSub} onChange={(e) => setViaPubSub(e.target.checked)} />
+              <span>Send through the Pub/Sub event stream (scored on arrival)</span>
+            </label>
+          ) : null}
+          {queuedInfo ? <div className="callout small" role="status">{queuedInfo}</div> : null}
           {error ? <div className="callout callout-error" role="alert">{error}</div> : null}
           <button className="btn btn-primary" type="submit" disabled={busy}>
-            {busy ? "Simulating..." : "Simulate and re-run analysis"}
+            {busy ? "Simulating..." : pubsubOn && viaPubSub ? "Publish transfer" : "Simulate and re-run analysis"}
           </button>
         </form>
 
@@ -232,6 +268,7 @@ export default function WhatIfPage() {
           ) : null}
         </section>
       </div>
+      <StreamFeed refreshKey={streamKey} />
     </div>
   );
 }

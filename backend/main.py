@@ -10,12 +10,15 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from backend.api import accounts, ai, analysis, cases, dashboard, demo, graph, health, transactions
+from backend.api import accounts, ai, analysis, cases, cloud, dashboard, demo, graph, health, transactions
 from backend.config import APP_VERSION, settings
 from backend.db import connect, init_schema
 from backend.errors import AppError, error_body
 from backend.services import analysis as analysis_service
-from backend.services import dataset
+from backend.services import bigquery_sync, dataset, state_sync
+
+WRITE_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
+
 
 class _CloudLoggingFormatter(logging.Formatter):
     """One JSON object per line, in the shape Google Cloud Logging parses (severity, message, logger)."""
@@ -43,6 +46,7 @@ HTTP_CODES = {400: "BAD_REQUEST", 401: "UNAUTHORIZED", 403: "FORBIDDEN", 404: "N
 
 def bootstrap() -> None:
     """Create schema; on an empty database load the synthetic baseline and run the first analysis."""
+    state_sync.restore()  # Cloud Run: bring back the last saved state before checking the schema
     with connect() as conn:
         init_schema(conn)
         from backend.config import DATASET_VERSION
@@ -58,7 +62,9 @@ def bootstrap() -> None:
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     bootstrap()
+    bigquery_sync.schedule_sync()  # refresh the analytics mirror shortly after start
     yield
+    state_sync.flush()
 
 
 app = FastAPI(title="FraudGraph AI", version=APP_VERSION, lifespan=lifespan,
@@ -74,6 +80,9 @@ async def request_context(request: Request, call_next):
     elapsed_ms = (time.perf_counter() - start) * 1000
     response.headers["X-Request-ID"] = request_id
     if request.url.path.startswith("/api"):
+        if request.method in WRITE_METHODS and response.status_code < 400:
+            state_sync.schedule_backup()
+            bigquery_sync.schedule_sync()
         logger.info("request_id=%s method=%s path=%s status=%s duration_ms=%.1f",
                     request_id, request.method, request.url.path, response.status_code, elapsed_ms)
     return response
@@ -106,7 +115,7 @@ async def unhandled_handler(request: Request, exc: Exception):
         "INTERNAL_ERROR", f"An unexpected error occurred (request {request_id}).", []))
 
 
-for module in (health, dashboard, demo, transactions, accounts, analysis, graph, cases, ai):
+for module in (health, dashboard, demo, transactions, accounts, analysis, graph, cases, ai, cloud):
     app.include_router(module.router, prefix="/api")
 
 

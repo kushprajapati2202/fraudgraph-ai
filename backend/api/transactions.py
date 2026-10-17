@@ -132,6 +132,12 @@ def get_transaction(transaction_id: str) -> dict:
 
 @router.post("/transactions/demo", status_code=201, dependencies=[Depends(require_demo_token)])
 def create_demo_transaction(body: DemoTransactionRequest) -> dict:
+    return ingest_transfer(body)
+
+
+def ingest_transfer(body: DemoTransactionRequest) -> dict:
+    """Validate and record one incoming transfer, enforcing controls in force. Shared by the HTTP endpoint and the
+    Pub/Sub push handler."""
     if body.source_account == body.destination_account:
         raise AppError(422, "VALIDATION_ERROR", "Source and destination accounts must differ.",
                        [{"field": "destination_account"}])

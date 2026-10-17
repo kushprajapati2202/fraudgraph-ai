@@ -162,6 +162,22 @@ CREATE TABLE IF NOT EXISTS ai_insights (
     created_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS ix_insights_scope ON ai_insights(scope, kind);
+CREATE TABLE IF NOT EXISTS ml_scores (
+    transaction_id TEXT PRIMARY KEY,
+    probability REAL NOT NULL,
+    top_features_json TEXT NOT NULL,
+    model TEXT NOT NULL,
+    scored_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS stream_events (
+    message_id TEXT PRIMARY KEY,
+    transaction_id TEXT,
+    status TEXT NOT NULL,
+    detail TEXT,
+    published_at TEXT,
+    processed_at TEXT NOT NULL,
+    latency_ms INTEGER
+);
 CREATE TABLE IF NOT EXISTS audit_events (
     event_id INTEGER PRIMARY KEY AUTOINCREMENT,
     case_id TEXT,
@@ -184,7 +200,7 @@ CREATE TABLE IF NOT EXISTS analysis_runs (
 TABLES = [
     "meta", "accounts", "transactions", "labels", "risk_assessments", "cases",
     "case_evidence", "analyst_decisions", "mitigation_actions", "transfer_controls", "case_documents", "ai_investigations",
-    "ai_insights", "audit_events", "analysis_runs",
+    "ai_insights", "audit_events", "analysis_runs", "ml_scores", "stream_events",
 ]
 
 # Columns added after a table first shipped; applied to databases created by an older build.

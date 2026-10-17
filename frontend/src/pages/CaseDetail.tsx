@@ -11,6 +11,7 @@ import { useInspector } from "../components/Inspector";
 import InvestigatorPanel from "../components/InvestigatorPanel";
 import { ActionsPanel, ReportPanel } from "../components/Mitigation";
 import SimilarCases from "../components/SimilarCases";
+import { CaseMlCard, PolicyCard } from "../components/Cloud";
 import NetworkGraph from "../graph/NetworkGraph";
 import { IconSparkle } from "../components/icons";
 import { useHealth } from "../health";
@@ -250,6 +251,8 @@ export default function CaseDetailPage() {
           <CounterfactualCard detail={d} onChanged={refresh} />
 
           <SimilarCases caseId={c.case_id} catalog={d.action_catalog} />
+          <PolicyCard caseId={c.case_id} />
+          <CaseMlCard caseId={c.case_id} />
 
           <section className="card card-flush" aria-labelledby="timeline-heading" id="sec-timeline">
             <div className="card-head">
