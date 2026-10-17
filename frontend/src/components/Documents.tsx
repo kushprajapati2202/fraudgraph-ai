@@ -1,3 +1,4 @@
+import { SecondReaderBlock } from "./Cloud";
 import { useRef, useState, type FormEvent } from "react";
 import { api, type CaseDetail, type DocumentRecord } from "../api/client";
 import { useAiStatus } from "../health";
@@ -113,6 +114,7 @@ function DocumentResult({ doc, preview }: { doc: DocumentRecord; preview?: strin
           })}
         </tbody>
       </table>
+      {r.second_reader ? <SecondReaderBlock reader={r.second_reader} before={r.verdict_before_cross_check} /> : null}
       {e.purpose ? <div className="small" style={{ marginTop: 6 }}><span className="muted">Stated purpose:</span> {e.purpose}</div> : null}
       {preview && e.regions?.length ? <RegionPreview src={preview} regions={e.regions} /> : null}
       {!preview && e.regions?.some((r) => r.kind === "ANOMALY") ? (

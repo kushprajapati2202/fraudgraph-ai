@@ -7,6 +7,7 @@ import { useHealth } from "../health";
 import { usePrefs, type Theme } from "../prefs";
 import { errorMessage, fmtTime, useAsync, usePageTitle } from "../util";
 import RuleTuningCard from "../components/RuleTuning";
+import { CloudServicesCard } from "../components/Cloud";
 
 const THEMES: { value: Theme; label: string }[] = [
   { value: "system", label: "System" },
@@ -112,6 +113,8 @@ export default function SettingsPage() {
         </section>
 
         <AiStatusCard />
+
+        <CloudServicesCard />
 
         <section className="card" aria-labelledby="data-heading" data-tour="settings-data">
           <div className="card-head">

@@ -1,0 +1,14 @@
+# Files not uploaded to Cloud Build by `gcloud run deploy --source .`
+.gcloudignore
+.git
+.gitignore
+.env
+*.db
+*.db-journal
+__pycache__/
+.pytest_cache/
+.venv/
+venv/
+frontend/node_modules/
+frontend/dist/
+docs/screenshots/

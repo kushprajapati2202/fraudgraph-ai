@@ -102,17 +102,19 @@ python scripts/check_gemini.py --investigate
 
 The **Tour** button in the top bar starts a 24-step walkthrough that moves through the dashboard, a case, transactions, the network and the what-if page, highlighting each area. It starts automatically on a first visit. Use Next and Back or the arrow keys, and Esc to close.
 
-## Demo path (3 minutes)
-1. **Dashboard.** Start with **Reset demo**, then **Run analysis**. Point out the synthetic-data banner.
+## Walkthrough (3 minutes)
+1. **Overview.** Restore the baseline from **Settings › Data environment**, then **Run analysis**. Point out the sandbox label in the sidebar.
 2. Open the **layered-transfer-01** case (HIGH). Choose an `EV-PATH` under *Highlight path* to show the chain and its timestamps. Click an edge to open the source record.
 3. Walk through the rule signals and their contributions. Click a signal chip to open the evidence.
 4. Click **Investigate with Gemini**. Click the citation chips, and point out alternative explanations, uncertainty, and the "AI-generated / advisory" label. One transfer description contains a prompt-injection string. It is shown as untrusted text, and Gemini is instructed to treat it as data.
-5. On **What-if**, click *Use demo suggestion*, then *Add synthetic transaction and re-run analysis*. Show the new dotted edge, the updated case, and the changed signals.
+5. On the **Simulator**, click *Use suggested transfer* and publish it through **Pub/Sub**. The live event stream shows it arrive, get scored and how long that took. Show the new dotted edge, the updated case and the changed signals.
 6. Under **Mitigation actions**, approve *Hold for manual review* on the collector account. Go back to the Simulator and send the suggested transfer again: it is **held** and the money does not move. On the case, reject it with a reason. The overview's *Funds held by controls* tile updates.
-7. Record a human decision with a rationale and show the audit history (System / AI / Human icons).
-8. Show the measured synthetic results in [docs/evaluation.md](docs/evaluation.md).
+7. On the case, open **What our policy says** (Vertex AI Search) and the **BigQuery ML second view**. Upload `docs/samples/booking-receipt.png` to see Gemini and Document AI cross-check each other.
+8. Record a human decision with a rationale and show the audit history (System / AI / Human icons).
+9. On the overview, **Ask BigQuery** a question, then open *SQL and safety checks* to show the generated SQL and the dry run.
+10. Show the measured synthetic results in [docs/evaluation.md](docs/evaluation.md).
 
-Say during the demo: *"These are synthetic transactions. The application processes the event live, but no real bank transaction is being created or modified."*
+Say during the walkthrough: *"These are synthetic transactions. The application processes the event live, but no real bank transaction is being created or modified."*
 
 ## Risk rules (`rules-v1`)
 
@@ -158,36 +160,33 @@ All routes use the `/api` prefix and return JSON. Errors use `{"error": {"code",
 | `POST /cases/{id}/actions/{action_id}/close` | Lift a control or complete a task: `{outcome}` |
 | `POST /cases/{id}/held-transfers/{transaction_id}` | Release or reject a held transfer: `{resolution: RELEASE or REJECT, note}` |
 | `POST /cases/{id}/decision` | `{decision: ESCALATE_FOR_REVIEW, DISMISS_ALERT or REQUEST_MORE_EVIDENCE, rationale, actor_label?}` |
+| `GET /cloud/status` | Which Google Cloud services this deployment uses and their last state (never secrets) |
+| `POST /cloud/stream/publish` | Publish a transfer to Pub/Sub; the push subscription delivers it to `POST /cloud/stream/push` (token-protected, idempotent) |
+| `GET /cloud/stream/events` | Recent stream deliveries with outcome and publish-to-scored latency |
+| `POST /cloud/bigquery/ask` | `{question}`: Gemini writes GoogleSQL; it runs only after the static guard and a BigQuery dry run |
+| `POST /cloud/bigquery/sync`, `GET /cloud/ml`, `POST /cloud/ml/train` | Refresh the BigQuery mirror; BigQuery ML model state, evaluation and (re)training |
+| `GET /cases/{id}/ml` | BigQuery ML probability and top feature attributions for the case's transfers |
+| `POST /cases/{id}/policy` | Policy guidance from Vertex AI Search passages, each step citing a passage |
 
 Interactive docs are at `/docs` when the server is running.
 
 ## Architecture
-See [docs/architecture.md](docs/architecture.md). In short: React + Vite + Cytoscape.js → FastAPI + Pydantic → a pure-Python risk engine, NetworkX graph and evidence builder → Gemini through `google-genai` with structured output and allow-list citation validation → SQLite. Everything ships as one container on Cloud Run.
+See [docs/architecture.md](docs/architecture.md). In short: React + Vite + Cytoscape.js → FastAPI + Pydantic → a pure-Python risk engine, NetworkX graph and evidence builder → Gemini through `google-genai` with structured output and allow-list citation validation → SQLite (snapshotted to Cloud Storage). Everything ships as one container on Cloud Run, with Gemini on Vertex AI, BigQuery and BigQuery ML for analytics, Pub/Sub for event-driven ingest, Document AI as a second document reader and Vertex AI Search for policy retrieval.
 
 ## Evaluation
 Run `.\scripts\windows\fg.ps1 check -Eval` (or `python scripts/evaluate.py --latency`) to regenerate [docs/evaluation.md](docs/evaluation.md). It reports transaction-level precision, recall and false-positive rate against the synthetic labels, per-scenario results, and in-process API p50/p95. Report the numbers it measures; don't round them up.
 
 An independent test is in [docs/evaluation-external.md](docs/evaluation-external.md): the same rules, unchanged, on a two-day slice (1.35 million transfers) of IBM's public anti-money-laundering dataset. The results there are much weaker (12.1% recall and 0.10% precision at MEDIUM+), which shows how much the self-made scenarios flatter the rules. To reproduce it, download `HI-Small_Trans.csv` and `HI-Small_Patterns.txt` from the Kaggle page linked in that file into `~/.cache/fraudgraph/external/ibm-aml` and run `python -I scripts/evaluate_external.py` (about 8 minutes). The data files are not kept in this repository.
 
-## Deploying to Google Cloud Run
+## Deploying to Google Cloud
 
-```powershell
-gcloud config set project <PROJECT_ID>
-gcloud services enable run.googleapis.com cloudbuild.googleapis.com artifactregistry.googleapis.com secretmanager.googleapis.com
-# store the key in Secret Manager (never in git, the Dockerfile, or frontend code)
-"<GEMINI_API_KEY>" | Out-File -NoNewline -Encoding ascii key.txt; gcloud secrets create gemini-api-key --data-file=key.txt; Remove-Item key.txt
-gcloud run deploy fraudgraph-ai --source . --region <REGION> --allow-unauthenticated `
-  --max-instances=1 --memory=1Gi `
-  --set-secrets GEMINI_API_KEY=gemini-api-key:latest `
-  --set-env-vars "GEMINI_MODEL=gemini-3.8-flash,DEMO_TOKEN=<choose-a-token>"
-# grant the Cloud Run service account roles/secretmanager.secretAccessor on the secret if prompted
-./scripts/smoke.ps1 -BaseUrl https://<service-url> -DemoToken <choose-a-token>
+One command sets up Cloud Run, Vertex AI, Cloud Storage, BigQuery (+ ML), Pub/Sub, Document AI, Vertex AI Search, Secret Manager and a budget alert:
+
+```bash
+ADMIN_TOKEN='choose-a-long-random-token' bash scripts/deploy.sh <PROJECT_ID>     # region defaults to us-central1
 ```
 
-Notes:
-- The container listens on `0.0.0.0:$PORT` and serves the built UI and the API from a single URL.
-- State lives in SQLite under `/tmp`, so it's lost when the container restarts. That's by design: startup and **Reset demo** restore the same baseline. `--max-instances=1` keeps all requests on one database.
-- Set a budget alert on the project. Reset and synthetic-add require `DEMO_TOKEN` when it's set.
+See [docs/deploy.md](docs/deploy.md) for what it creates, cost controls and how state is kept.
 
 ## Repository layout
 ```
@@ -207,5 +206,6 @@ scripts/   generate_dataset.py, evaluate.py, smoke.ps1
 - Baselines and relationship novelty only cover the two-month synthetic window.
 - Mitigation is enforced inside the sandbox only, on transfers submitted after a control is approved. A held or rejected transfer is still scored as an attempted transfer, so it still counts in a case's signals and amount.
 - Demo access is token-gated for writes only. There are no user accounts or roles.
-- SQLite in `/tmp` is ephemeral. Use Firestore if you need durable multi-instance state.
+- SQLite is the system of record, snapshotted to Cloud Storage, so the service runs as a single instance. Move `backend/db.py` to Cloud SQL to scale out.
+- The BigQuery ML model and the policy library are trained and written on synthetic material; they show the technique, not production accuracy or real policy.
 - Gemini output can still be wrong even when every citation is valid. Validation proves that the cited evidence exists, not that the reasoning is correct. Human review is required.

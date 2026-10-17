@@ -1005,3 +1005,15 @@ body.drawer-open, body.modal-open { overflow: hidden; }
 .grid-even > .card-flush { display: flex; flex-direction: column; }
 .grid-even > .stack { display: flex; flex-direction: column; }
 .grid-even > .stack > .card:last-child { flex: 1; }
+
+/* ---- Google Cloud panels ---- */
+.step-list { margin: 0 0 4px; padding-left: 20px; display: grid; gap: 6px; }
+.step-list li { line-height: 1.5; }
+.code-block {
+  margin: 8px 0; padding: 10px 12px; border-radius: 8px; background: var(--surface-2); border: 1px solid var(--border);
+  font-family: var(--font-mono); white-space: pre-wrap; word-break: break-word; max-height: 260px; overflow: auto;
+}
+.table-wrap { border: 1px solid var(--border); border-radius: 8px; }
+.table-wrap .table { margin: 0; }
+.service-list { list-style: none; margin: 0; padding: 0; }
+.service-list li:last-child { border-bottom: 0 !important; }

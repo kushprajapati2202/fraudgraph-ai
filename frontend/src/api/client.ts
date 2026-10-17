@@ -309,7 +309,105 @@ export interface DocumentRecord {
       regions?: { label: string; kind: "FIELD" | "ANOMALY"; box_2d: [number, number, number, number] }[];
     };
     checks?: { check: string; result: "MATCH" | "PARTIAL" | "MISMATCH" | "NOT_FOUND"; document: string; record: string; note: string }[];
+    verdict_before_cross_check?: string;
+    second_reader?: SecondReader;
   };
+}
+
+/** Document AI read the same file independently; fields are compared with Gemini's reading in code. */
+export interface SecondReader {
+  status: "OK" | "UNAVAILABLE";
+  reader: string;
+  processor?: string;
+  detail?: string;
+  note?: string | null;
+  agreed?: number;
+  disagreed?: number;
+  fields?: { field: string; gemini: string; document_ai: string; agreement: "AGREE" | "DISAGREE" | "ONLY_GEMINI" | "ONLY_DOCUMENT_AI" | "NEITHER" }[];
+}
+
+export interface CloudService {
+  key: string;
+  name: string;
+  enabled: boolean;
+  detail: string | null;
+  state?: Record<string, any>;
+}
+
+export interface CloudStatus {
+  project: string | null;
+  services: CloudService[];
+}
+
+export interface StreamEvent {
+  message_id: string;
+  transaction_id: string | null;
+  status: string;
+  detail: string | null;
+  published_at: string | null;
+  processed_at: string;
+  latency_ms: number | null;
+  score: number | null;
+  risk_band: RiskBand | null;
+}
+
+export interface BigQueryAskResult {
+  question: string;
+  sql: string;
+  interpretation: string;
+  columns: string[];
+  rows: Record<string, any>[];
+  row_count: number;
+  chart: "BAR" | "LINE" | "TABLE";
+  x_column: string;
+  y_column: string;
+  answer: string;
+  answer_source: "GEMINI" | "SYSTEM";
+  bytes_estimated: number;
+  bytes_billed: number;
+  repairs: { sql: string; rejected: string }[];
+}
+
+export interface MlFeature {
+  feature: string;
+  label: string;
+  attribution: number;
+}
+
+export interface MlInfo {
+  enabled: boolean;
+  state: "NOT_TRAINED" | "TRAINING" | "TRAINED" | "FAILED";
+  error: string | null;
+  trained_at: string | null;
+  metrics: Record<string, number | null> | null;
+  global_explain: MlFeature[] | null;
+  scored: number;
+  scored_at: string | null;
+  model: string | null;
+}
+
+export interface CaseMlTransfer {
+  transaction_id: string;
+  rule_score: number | null;
+  probability: number;
+  top_features: MlFeature[];
+  scored_at: string;
+}
+
+export interface CaseMl {
+  enabled: boolean;
+  case_id: string;
+  case_rule_score: number;
+  agreement: "AGREE" | "MODEL_HIGHER" | "RULES_HIGHER" | null;
+  top: CaseMlTransfer | null;
+  transfers: CaseMlTransfer[];
+}
+
+export interface PolicyResult {
+  query: string;
+  passages: { id: string; title: string; link: string; text: string }[];
+  summary: string;
+  steps: { step: string; citations: string[] }[];
 }
 
 export interface SimilarMatch {
@@ -939,6 +1037,18 @@ export const api = {
   contactScript: (id: string, body: { account_id: string; channel: string; language: LanguageCode }) =>
     request<Insight<ContactScriptResult>>("POST", `/api/cases/${encodeURIComponent(id)}/contact-script`, body),
   strDraft: (id: string) => request<Insight<StrDraftResult>>("POST", `/api/cases/${encodeURIComponent(id)}/str`),
+  // Google Cloud
+  cloudStatus: () => request<CloudStatus>("GET", "/api/cloud/status"),
+  streamPublish: (body: Record<string, unknown>) =>
+    request<{ status: string; message_id: string; transaction_id: string; topic: string }>("POST", "/api/cloud/stream/publish", body),
+  streamEvents: (limit = 20) => request<{ enabled: boolean; events: StreamEvent[] }>("GET", `/api/cloud/stream/events${qs({ limit })}`),
+  askBigQuery: (question: string) => request<Insight<BigQueryAskResult>>("POST", "/api/cloud/bigquery/ask", { question }),
+  syncBigQuery: () => request<Record<string, any>>("POST", "/api/cloud/bigquery/sync"),
+  mlInfo: () => request<MlInfo>("GET", "/api/cloud/ml"),
+  trainMl: () => request<{ state: string }>("POST", "/api/cloud/ml/train"),
+  caseMl: (id: string) => request<CaseMl>("GET", `/api/cases/${encodeURIComponent(id)}/ml`),
+  casePolicy: (id: string) => request<Insight<PolicyResult> | null>("GET", `/api/cases/${encodeURIComponent(id)}/policy`),
+  makeCasePolicy: (id: string) => request<Insight<PolicyResult>>("POST", `/api/cases/${encodeURIComponent(id)}/policy`),
   translate: (id: string, language: LanguageCode) =>
     request<Insight<TranslationResult>>("POST", `/api/cases/${encodeURIComponent(id)}/translate`, { language }),
 };
