@@ -3,17 +3,17 @@ import { Link, useParams } from "react-router-dom";
 import { api } from "../api/client";
 import { AccountControlTags, Avatar, ControlTag, ErrorState, Loading, RiskBadge, ScoreRing, StatusChip, SyntheticTag } from "../components/common";
 import { Busy, SecondOpinion, SourceNote, useRun } from "../components/ai";
-import { ContactScriptCard, CounterfactualCard, StrDraftCard } from "../components/CaseAssist";
-import { AuditTimeline, DecisionPanel } from "../components/DecisionPanel";
+import { CounterfactualCard, GuardrailCard, StrDraftCard } from "../components/CaseAssist";
+import { DecisionPanel } from "../components/DecisionPanel";
 import DocumentPanel from "../components/Documents";
 import EvidenceList from "../components/EvidenceList";
 import { useInspector } from "../components/Inspector";
 import InvestigatorPanel from "../components/InvestigatorPanel";
 import { ActionsPanel, ReportPanel } from "../components/Mitigation";
 import SimilarCases from "../components/SimilarCases";
-import { CaseMlCard, PolicyCard } from "../components/Cloud";
+import { CaseMlCard, CaseMlChip, PolicyCard } from "../components/Cloud";
 import NetworkGraph from "../graph/NetworkGraph";
-import { IconSparkle } from "../components/icons";
+import { IconClock, IconSparkle } from "../components/icons";
 import { useHealth } from "../health";
 import { caseHeadline, fmtAmount, fmtDuration, fmtTime, useAsync, usePageTitle } from "../util";
 
@@ -84,11 +84,16 @@ export default function CaseDetailPage() {
             <a href="#sec-similar">Similar cases</a>
             <a href="#sec-timeline">Timeline</a>
             <a href="#sec-evidence">Evidence</a>
+            <a href="#sec-str">Regulatory report</a>
           </nav>
         </div>
         <div className="case-hero-side">
+          <Link to={`/audit?case_id=${encodeURIComponent(c.case_id)}`} className="btn btn-small" data-tour="case-audit" title="Open this case's full audit trail">
+            <IconClock size={14} /> View history ({d.audit_events.length})
+          </Link>
           <StatusChip status={c.status} />
           <SecondOpinion rule={c.risk_band} ai={d.latest_investigation?.response.result?.review_priority} />
+          <CaseMlChip caseId={c.case_id} />
           <p className="small muted">The score ranks review priority. It is not a probability of fraud or a finding against anyone.</p>
         </div>
       </header>
@@ -321,6 +326,8 @@ export default function CaseDetailPage() {
           <div id="sec-evidence">
             <EvidenceList evidence={d.evidence} />
           </div>
+
+          <StrDraftCard detail={d} onChanged={refresh} />
         </div>
 
         <div className="stack">
@@ -334,13 +341,11 @@ export default function CaseDetailPage() {
             translation={d.ai_extras.TRANSLATION}
             onChanged={refresh}
           />
+          <GuardrailCard caseId={c.case_id} />
           <DocumentPanel detail={d} onChanged={refresh} />
           <ActionsPanel detail={d} onChanged={refresh} />
-          <ContactScriptCard detail={d} onChanged={refresh} />
           <DecisionPanel caseId={c.case_id} status={c.status} decisions={d.decisions} onSaved={refresh} />
           <ReportPanel detail={d} onChanged={refresh} />
-          <StrDraftCard detail={d} onChanged={refresh} />
-          <AuditTimeline events={d.audit_events} />
         </div>
       </div>
     </div>

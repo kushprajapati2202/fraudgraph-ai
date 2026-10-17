@@ -188,6 +188,17 @@ export interface AuditEvent {
   created_at: string;
 }
 
+/** One row of the workspace audit trail, with the title of its case (null for workspace-level events). */
+export interface AuditLogEntry extends AuditEvent {
+  title: string | null;
+}
+
+export interface AuditLog extends Paged<AuditLogEntry> {
+  /** Filter options: cases with at least one audit event, most recently audited first. */
+  cases: { case_id: string; title: string | null; events: number }[];
+  workspace_events: number;
+}
+
 export interface DecisionRecord {
   decision_id: number;
   case_id: string;
@@ -401,6 +412,24 @@ export interface CaseMl {
   agreement: "AGREE" | "MODEL_HIGHER" | "RULES_HIGHER" | null;
   top: CaseMlTransfer | null;
   transfers: CaseMlTransfer[];
+}
+
+export interface GuardrailCheck {
+  key: string;
+  title: string;
+  attack: string;
+  outcome: "BLOCKED" | "CONTAINED" | "PASSED" | "FAILED";
+  detail: string;
+}
+
+export interface GuardrailTest {
+  case_id: string;
+  evidence_sent: number;
+  attacks: number;
+  stopped: number;
+  all_passed: boolean;
+  model_called: boolean;
+  checks: GuardrailCheck[];
 }
 
 export interface PolicyResult {
@@ -1005,6 +1034,7 @@ export const api = {
     request<TransactionDetail & { created_accounts: string[]; message: string }>("POST", "/api/transactions/demo", body),
   cases: (params: Record<string, string | undefined>) => request<{ items: CaseSummary[]; total: number }>("GET", `/api/cases${qs(params)}`),
   case: (id: string) => request<CaseDetail>("GET", `/api/cases/${encodeURIComponent(id)}`),
+  audit: (params: { case_id?: string; page?: number; page_size?: number }) => request<AuditLog>("GET", `/api/audit${qs(params)}`),
   graph: (params: { case_id?: string; account_id?: string; time_window_minutes?: number }) =>
     request<GraphData>("GET", `/api/graph${qs(params)}`),
   investigate: (id: string, question?: string) =>
@@ -1033,6 +1063,7 @@ export const api = {
   makeRuleTuning: () => request<Insight<RuleTuningResult>>("POST", "/api/ai/rule-tuning"),
   // Case assistants
   narrate: (id: string) => request<Insight<NarrationResult>>("POST", `/api/cases/${encodeURIComponent(id)}/narrate`),
+  guardrailTest: (id: string) => request<GuardrailTest>("POST", `/api/cases/${encodeURIComponent(id)}/guardrail-test`),
   counterfactual: (id: string) => request<Insight<CounterfactualResult>>("POST", `/api/cases/${encodeURIComponent(id)}/counterfactual`),
   contactScript: (id: string, body: { account_id: string; channel: string; language: LanguageCode }) =>
     request<Insight<ContactScriptResult>>("POST", `/api/cases/${encodeURIComponent(id)}/contact-script`, body),

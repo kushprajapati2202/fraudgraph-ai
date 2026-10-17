@@ -100,17 +100,3 @@ export function Unavailable({ rec, what }: { rec: Insight<unknown>; what: string
   );
 }
 
-export function copyText(text: string): Promise<void> {
-  return navigator.clipboard?.writeText(text) ?? Promise.reject(new Error("Clipboard unavailable"));
-}
-
-export function downloadText(filename: string, text: string): void {
-  const url = URL.createObjectURL(new Blob([text], { type: "text/markdown;charset=utf-8" }));
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
-}

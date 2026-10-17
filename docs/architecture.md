@@ -71,6 +71,30 @@ Every Google Cloud integration is optional and off until its setting is present,
 ## Persistence
 SQLite is the system of record and keeps local setup to zero. On Cloud Run it runs with `--max-instances=1` in `/tmp`; after every successful write request a consistent copy (SQLite online backup API) is uploaded to Cloud Storage two seconds after the last change, and on shutdown any pending change is flushed. On start the service restores the latest snapshot before checking the schema, so decisions, controls and documents survive restarts and redeploys. BigQuery is a read-only analytical copy, never written back. To run more than one instance, move `backend/db.py` to Cloud SQL for PostgreSQL.
 
+## Path to production
+
+The prototype runs as one Cloud Run instance on purpose: it keeps the free-trial footprint small and lets SQLite be the system of record with no database to run. Everything that has to scale is already decoupled from that choice.
+
+**What already scales**
+- **Ingest** is event-driven. Transfers arrive through Pub/Sub push, idempotently, so a burst queues in the topic rather than in the API.
+- **Analytics and ML** run in BigQuery, which the app never queries on a page load: dashboards read SQLite, *Ask BigQuery* and BigQuery ML read the mirror, and model scores are copied back in batches.
+- **Gemini** is called through Vertex AI with a service account, a model fallback chain and per-call time budgets, so model load does not take the app down.
+- **The API is stateless** apart from the database connection, and Cloud Run already scales it to zero when idle.
+
+**What changes to scale out**
+
+| Step | Change | Effort |
+|---|---|---|
+| 1. Database | Point `backend/db.py` at **Cloud SQL for PostgreSQL** (or AlloyDB) instead of SQLite in `/tmp`. Queries are plain SQL with bound parameters. Fewer than ten statements are SQLite-specific (`INSERT OR IGNORE`, `julianday`, `strftime`, `AUTOINCREMENT`, `PRAGMA`) and have direct PostgreSQL equivalents. | Days, not weeks |
+| 2. Snapshot | Remove the Cloud Storage snapshot (`state_sync.py`); Cloud SQL backups and point-in-time recovery replace it. | Hours |
+| 3. Instances | Raise `--max-instances` on Cloud Run. Ingest, BigQuery sync and model scoring are unchanged. | Config |
+| 4. Scoring at volume | Move batch scoring of the full history to a scheduled BigQuery job or Cloud Run job, keeping the rule engine (`risk_engine.py`, a pure function) as the shared library. Live scoring on arrival stays in the API. | Days |
+| 5. Identity | Put the console behind Identity-Aware Proxy so the analyst name in the audit trail comes from the signed-in Google identity. | Hours |
+
+**What does not change:** the rule engine, the evidence model, the Gemini grounding and citation checks, the mitigation controls and the audit trail. They depend only on the data, not on where it is stored.
+
+**Detection beyond rules.** The rules stay the primary score because each point is explainable to an auditor and a customer. BigQuery ML is the path for learned detection: today it is trained on synthetic scenario labels and shown as a second view with `ML.EXPLAIN_PREDICT` attributions. Trained on a bank's confirmed-case history, it can become a second trigger, with disagreements between rules, model and Gemini's review priority routed to an analyst rather than acted on automatically.
+
 ## Security notes
 - All SQL uses bound parameters. Sort columns come from an allow-list, and LIKE wildcards are escaped.
 - When `DEMO_TOKEN` is set, `POST /api/demo/reset` and `POST /api/transactions/demo` require `X-Demo-Token`, as do Pub/Sub publishing, the BigQuery sync and model training.

@@ -6,7 +6,6 @@ import { ActivityChart, BandMix, HBars } from "../components/charts";
 import { AskPortfolio, BriefingCard, DayExplain, PatternsCard } from "../components/DashboardAi";
 import { Empty, ErrorState, Loading, ScoreRing, StatusChip } from "../components/common";
 import RecommendationsCard from "../components/Recommendations";
-import { AskBigQueryCard } from "../components/Cloud";
 import { IconCases, IconChevron, IconFlow, IconLock, IconRefresh, IconSparkle, IconTransactions, IconUser } from "../components/icons";
 import { usePrefs } from "../prefs";
 import { caseHeadline, errorMessage, fmtAmount, fmtCompact, fmtTime, plural, useAsync, usePageTitle } from "../util";
@@ -163,7 +162,6 @@ export default function DashboardPage() {
       {error ? <div className="callout callout-error" role="alert">{error}</div> : null}
 
       <AskPortfolio />
-      <AskBigQueryCard />
 
       <div className="kpis" data-tour="dash-stats">
         <div className="kpi">

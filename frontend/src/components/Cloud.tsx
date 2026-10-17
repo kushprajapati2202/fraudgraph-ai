@@ -44,6 +44,29 @@ const pct = (v: number | null | undefined) => (v === null || v === undefined ? "
 
 // ---- Case page: BigQuery ML second view ----
 
+const ML_CHIP = {
+  AGREE: { label: "ML agrees", cls: "opinion-agree" },
+  MODEL_HIGHER: { label: "ML rates higher", cls: "opinion-differ" },
+  RULES_HIGHER: { label: "ML rates lower", cls: "opinion-differ" },
+};
+
+/** Header chip: does the BigQuery ML model agree with the rules? Hidden until the model has scored the case. */
+export function CaseMlChip({ caseId }: { caseId: string }) {
+  const { data } = useAsync(() => api.caseMl(caseId), [caseId]);
+  if (!data?.enabled || !data.top || !data.agreement) return null;
+  const chip = ML_CHIP[data.agreement];
+  return (
+    <a
+      href="#sec-ml"
+      className={`chip opinion ${chip.cls}`}
+      style={{ textDecoration: "none" }}
+      title={`BigQuery ML likelihood ${pct(data.top.probability)} for ${data.top.transaction_id}, rule score ${data.case_rule_score}. A second view, not a finding.`}
+    >
+      <span aria-hidden="true">{"◆"}</span> {chip.label} ({pct(data.top.probability)})
+    </a>
+  );
+}
+
 export function CaseMlCard({ caseId }: { caseId: string }) {
   const { data, error, loading, reload } = useAsync(() => api.caseMl(caseId), [caseId]);
   if (!data?.enabled && !loading && !error) return null;
@@ -188,7 +211,8 @@ const BQ_EXAMPLES = [
   "How much money is currently held by controls, per case?",
 ];
 
-export function AskBigQueryCard() {
+/** `embedded` renders the panel without its own card, for use inside another card (the overview's "For you" card). */
+export function AskBigQueryCard({ embedded = false }: { embedded?: boolean }) {
   const cloud = useCloud();
   const [question, setQuestion] = useState("");
   const [rec, setRec] = useState<Insight<BigQueryAskResult> | null>(null);
@@ -203,15 +227,20 @@ export function AskBigQueryCard() {
     r && r.chart !== "TABLE"
       ? r.rows.slice(0, 15).map((row, i) => ({ key: String(i), label: String(row[r.x_column]), value: Number(row[r.y_column]) || 0 }))
       : [];
+  const Wrap = embedded ? "div" : "section";
   return (
-    <section className="card ai-card" aria-labelledby="bq-heading" id="sec-bigquery">
-      <div className="card-head">
-        <div>
-          <AiTitle id="bq-heading">Ask BigQuery</AiTitle>
-          <div className="card-sub">Gemini writes the SQL; it only runs after a read-only check and a BigQuery dry run</div>
+    <Wrap className={embedded ? "bq-embedded" : "card ai-card"} aria-labelledby={embedded ? undefined : "bq-heading"} id="sec-bigquery">
+      {embedded ? (
+        <p className="muted small" style={{ marginTop: 0 }}>Gemini writes the SQL; it only runs after a read-only check and a BigQuery dry run.</p>
+      ) : (
+        <div className="card-head">
+          <div>
+            <AiTitle id="bq-heading">Ask BigQuery</AiTitle>
+            <div className="card-sub">Gemini writes the SQL; it only runs after a read-only check and a BigQuery dry run</div>
+          </div>
+          <span className="chip">BigQuery</span>
         </div>
-        <span className="chip">BigQuery</span>
-      </div>
+      )}
       <form
         className="row"
         style={{ gap: 8 }}
@@ -291,7 +320,7 @@ export function AskBigQueryCard() {
           </div>
         </div>
       ) : null}
-    </section>
+    </Wrap>
   );
 }
 

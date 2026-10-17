@@ -51,6 +51,13 @@ export const IconSimulator = (p: P) => (
     <path d="M7.500 14h9" />
   </Svg>
 );
+export const IconAudit = (p: P) => (
+  <Svg {...p}>
+    <path d="M9 4h6a1 1 0 0 1 1 1v1H8V5a1 1 0 0 1 1-1z" />
+    <path d="M16 5h2a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h2" />
+    <path d="M9 11h6M9 15h4" />
+  </Svg>
+);
 export const IconSettings = (p: P) => (
   <Svg {...p}>
     <circle cx="12" cy="12" r="3" />

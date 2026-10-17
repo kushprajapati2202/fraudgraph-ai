@@ -9,7 +9,8 @@ import re
 
 from backend.models.schemas import (DECISION_TO_STATUS, ActionRequest, ChatRequest, CloseActionRequest, DecisionRequest,
                                     DocumentRequest, HeldTransferRequest, InvestigateRequest)
-from backend.services import ai_common, audit, case_ai, document_check, gemini_service, mitigation, similarity
+from backend.services import (ai_common, audit, case_ai, document_check, gemini_service, guardrails, mitigation,
+                              similarity)
 
 router = APIRouter(tags=["cases"])
 
@@ -247,6 +248,15 @@ def investigate(case_id: str, body: InvestigateRequest | None = None) -> dict:
         raise AppError(409, "NO_EVIDENCE", "This case has no evidence; run analysis first.")
     response = gemini_service.investigate(case, evidence, question)
     return _store_ai(case_id, "INVESTIGATION", question, response)
+
+
+@router.post("/cases/{case_id}/guardrail-test")
+def guardrail_test(case_id: str) -> dict:
+    """Run a tampered model response through the production validators; no model is called."""
+    case, evidence = _load_for_ai(case_id)
+    if not evidence:
+        raise AppError(409, "NO_EVIDENCE", "This case has no evidence; run analysis first.")
+    return guardrails.run(case, evidence)
 
 
 @router.post("/cases/{case_id}/chat")
