@@ -2,7 +2,7 @@
 .SYNOPSIS
   End-to-end smoke test against a running FraudGraph AI instance (local or Cloud Run).
 .EXAMPLE
-  ./scripts/smoke.ps1 -BaseUrl https://fraudgraph-ai-xxxx.a.run.app -DemoToken $env:DEMO_TOKEN
+  .\scripts\windows\smoke.ps1 -BaseUrl https://fraudgraph-ai-xxxx.a.run.app -DemoToken $env:DEMO_TOKEN
 #>
 param(
     [Parameter(Mandatory = $true)][string]$BaseUrl,

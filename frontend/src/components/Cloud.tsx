@@ -44,6 +44,29 @@ const pct = (v: number | null | undefined) => (v === null || v === undefined ? "
 
 // ---- Case page: BigQuery ML second view ----
 
+const ML_CHIP = {
+  AGREE: { label: "ML agrees", cls: "opinion-agree" },
+  MODEL_HIGHER: { label: "ML rates higher", cls: "opinion-differ" },
+  RULES_HIGHER: { label: "ML rates lower", cls: "opinion-differ" },
+};
+
+/** Header chip: does the BigQuery ML model agree with the rules? Hidden until the model has scored the case. */
+export function CaseMlChip({ caseId }: { caseId: string }) {
+  const { data } = useAsync(() => api.caseMl(caseId), [caseId]);
+  if (!data?.enabled || !data.top || !data.agreement) return null;
+  const chip = ML_CHIP[data.agreement];
+  return (
+    <a
+      href="#sec-ml"
+      className={`chip opinion ${chip.cls}`}
+      style={{ textDecoration: "none" }}
+      title={`BigQuery ML likelihood ${pct(data.top.probability)} for ${data.top.transaction_id}, rule score ${data.case_rule_score}. A second view, not a finding.`}
+    >
+      <span aria-hidden="true">{"◆"}</span> {chip.label} ({pct(data.top.probability)})
+    </a>
+  );
+}
+
 export function CaseMlCard({ caseId }: { caseId: string }) {
   const { data, error, loading, reload } = useAsync(() => api.caseMl(caseId), [caseId]);
   if (!data?.enabled && !loading && !error) return null;
@@ -179,7 +202,7 @@ export function PolicyCard({ caseId }: { caseId: string }) {
   );
 }
 
-// ---- Overview: Ask BigQuery (Gemini writes SQL, code gates it) ----
+// ---- Overview: Ask BigQuery (Gemini writes the query, code gates it; the query itself is never shown) ----
 
 const BQ_EXAMPLES = [
   "Total amount and transfer count by channel for flagged transfers",
@@ -188,7 +211,8 @@ const BQ_EXAMPLES = [
   "How much money is currently held by controls, per case?",
 ];
 
-export function AskBigQueryCard() {
+/** `embedded` renders the panel without its own card, for use inside another card (the overview's "For you" card). */
+export function AskBigQueryCard({ embedded = false }: { embedded?: boolean }) {
   const cloud = useCloud();
   const [question, setQuestion] = useState("");
   const [rec, setRec] = useState<Insight<BigQueryAskResult> | null>(null);
@@ -203,15 +227,20 @@ export function AskBigQueryCard() {
     r && r.chart !== "TABLE"
       ? r.rows.slice(0, 15).map((row, i) => ({ key: String(i), label: String(row[r.x_column]), value: Number(row[r.y_column]) || 0 }))
       : [];
+  const Wrap = embedded ? "div" : "section";
   return (
-    <section className="card ai-card" aria-labelledby="bq-heading" id="sec-bigquery">
-      <div className="card-head">
-        <div>
-          <AiTitle id="bq-heading">Ask BigQuery</AiTitle>
-          <div className="card-sub">Gemini writes the SQL; it only runs after a read-only check and a BigQuery dry run</div>
+    <Wrap className={embedded ? "bq-embedded" : "card ai-card"} aria-labelledby={embedded ? undefined : "bq-heading"} id="sec-bigquery">
+      {embedded ? (
+        <p className="muted small" style={{ marginTop: 0 }}>Answers come straight from the analytics data. Every query is read-only and checked before it runs.</p>
+      ) : (
+        <div className="card-head">
+          <div>
+            <AiTitle id="bq-heading">Ask BigQuery</AiTitle>
+            <div className="card-sub">Answers come straight from the analytics data. Every query is read-only and checked before it runs</div>
+          </div>
+          <span className="chip">BigQuery</span>
         </div>
-        <span className="chip">BigQuery</span>
-      </div>
+      )}
       <form
         className="row"
         style={{ gap: 8 }}
@@ -232,7 +261,7 @@ export function AskBigQueryCard() {
           </button>
         ))}
       </div>
-      {busy ? <Busy label="Writing and checking the query" /> : null}
+      {busy ? <Busy label="Looking up the answer" /> : null}
       {error ? <ErrorState message={error} /> : null}
       {rec ? <Unavailable rec={rec} what="Gemini" /> : null}
       {r ? (
@@ -274,15 +303,14 @@ export function AskBigQueryCard() {
           )}
           <details style={{ marginTop: 10 }}>
             <summary className="small" style={{ cursor: "pointer", color: "var(--muted)", fontWeight: 600 }}>
-              SQL and safety checks
+              Safety checks
             </summary>
-            <pre className="code-block small">{r.sql}</pre>
             <ul className="small muted">
-              <li>Static check: single read-only SELECT over the analytics dataset only.</li>
+              <li>Read-only: the query can only look at the analytics data, never change it.</li>
               <li>
-                BigQuery dry run passed: {(r.bytes_estimated / 1024).toFixed(0)} KB estimated, {(r.bytes_billed / 1024).toFixed(0)} KB billed (cap 200 MB).
+                Cost checked before running: {(r.bytes_billed / 1024).toFixed(0)} KB processed (limit 200 MB).
               </li>
-              {r.repairs.length ? <li>Gemini repaired its first query after BigQuery rejected it: “{r.repairs[0].rejected.slice(0, 160)}”.</li> : null}
+              {r.repairs ? <li>The first attempt did not pass the checks and was rewritten automatically.</li> : null}
               <li>Answer: {r.answer_source === "GEMINI" ? "written by Gemini; every number was checked against the rows" : "plain summary (Gemini's text did not pass the number check)"}.</li>
             </ul>
           </details>
@@ -291,7 +319,7 @@ export function AskBigQueryCard() {
           </div>
         </div>
       ) : null}
-    </section>
+    </Wrap>
   );
 }
 

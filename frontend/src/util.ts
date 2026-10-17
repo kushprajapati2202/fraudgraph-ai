@@ -47,10 +47,6 @@ export function fmtTime(ts: string | null | undefined): string {
   return ts.replace("T", " ").slice(0, 16);
 }
 
-export function fmtClock(ts: string): string {
-  return ts.slice(11, 16);
-}
-
 export function errorMessage(err: unknown): string {
   if (err instanceof ApiError) return err.message;
   if (err instanceof Error) return err.message;

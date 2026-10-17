@@ -10,7 +10,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from backend.api import accounts, ai, analysis, cases, cloud, dashboard, demo, graph, health, transactions
+from backend.api import accounts, ai, analysis, audit, cases, cloud, dashboard, demo, graph, health, transactions
 from backend.config import APP_VERSION, settings
 from backend.db import connect, init_schema
 from backend.errors import AppError, error_body
@@ -115,7 +115,7 @@ async def unhandled_handler(request: Request, exc: Exception):
         "INTERNAL_ERROR", f"An unexpected error occurred (request {request_id}).", []))
 
 
-for module in (health, dashboard, demo, transactions, accounts, analysis, graph, cases, ai, cloud):
+for module in (health, dashboard, demo, transactions, accounts, analysis, graph, cases, ai, cloud, audit):
     app.include_router(module.router, prefix="/api")
 
 

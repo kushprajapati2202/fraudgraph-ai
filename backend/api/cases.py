@@ -8,8 +8,9 @@ from backend.errors import AppError, not_found
 import re
 
 from backend.models.schemas import (DECISION_TO_STATUS, ActionRequest, ChatRequest, CloseActionRequest, DecisionRequest,
-                                    DocumentRequest, HeldTransferRequest, InvestigateRequest)
-from backend.services import ai_common, audit, case_ai, document_check, gemini_service, mitigation, similarity
+                                    DocumentRequest, GuardrailTestRequest, HeldTransferRequest, InvestigateRequest)
+from backend.services import (ai_common, audit, case_ai, document_check, gemini_service, guardrails, mitigation,
+                              similarity)
 
 router = APIRouter(tags=["cases"])
 
@@ -247,6 +248,24 @@ def investigate(case_id: str, body: InvestigateRequest | None = None) -> dict:
         raise AppError(409, "NO_EVIDENCE", "This case has no evidence; run analysis first.")
     response = gemini_service.investigate(case, evidence, question)
     return _store_ai(case_id, "INVESTIGATION", question, response)
+
+
+@router.post("/cases/{case_id}/guardrail-test")
+def guardrail_test(case_id: str, body: GuardrailTestRequest | None = None) -> dict:
+    """Run a tampered model response through the production validators; no model is called. Each run is audited,
+    so a reviewer can show when the AI controls were last verified, by whom, and with what result."""
+    case, evidence = _load_for_ai(case_id)
+    if not evidence:
+        raise AppError(409, "NO_EVIDENCE", "This case has no evidence; run analysis first.")
+    result = guardrails.run(case, evidence)
+    actor = ((body.actor_label if body else None) or "Analyst").strip()
+    with connect() as conn:
+        audit.record(conn, "AI_GUARDRAIL_TEST", audit.ACTOR_HUMAN, {
+            "actor_label": actor, "attacks": result["attacks"], "stopped": result["stopped"],
+            "all_passed": result["all_passed"], "evidence_sent": result["evidence_sent"],
+            "failed_checks": [c["key"] for c in result["checks"] if c["outcome"] == "FAILED"],
+        }, case_id=case_id)
+    return result
 
 
 @router.post("/cases/{case_id}/chat")

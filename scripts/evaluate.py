@@ -185,7 +185,7 @@ def render(m: dict, latency: list[dict] | None) -> str:
         for r in latency:
             lines.append(f"| {r['endpoint']} | {r['p50']:.1f} | {r['p95']:.1f} |")
         lines.append("")
-        lines.append("Measured on the developer machine; re-measure on Cloud Run with `scripts/smoke.ps1` timings.")
+        lines.append("Measured on the developer machine; re-measure on Cloud Run with `scripts/windows/smoke.ps1` timings.")
     external = ROOT / "docs" / "evaluation-external.json"
     if external.exists():
         x = json.loads(external.read_text(encoding="utf-8"))

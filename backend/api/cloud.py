@@ -129,12 +129,12 @@ def bigquery_question(body: AskRequest) -> dict:
     try:
         response = bigquery_ask.ask(question)
     except bigquery_ask.SqlRejected as exc:
-        raise AppError(422, "SQL_REJECTED", "Gemini could not produce a safe query for that question.",
-                       [{"reason": str(exc)[:300]}]) from None
+        raise AppError(422, "SQL_REJECTED", "That question could not be answered safely from the analytics data. "
+                       "Try rephrasing it, for example naming the transfers, cases or accounts you mean.") from None
     extra = {"question": question[:120]}
     if response["status"] == "OK":
         r = response["result"]
-        extra.update(sql=r["sql"][:1500], rows=r["row_count"], bytes_billed=r["bytes_billed"], repairs=len(r["repairs"]))
+        extra.update(rows=r["row_count"], bytes_billed=r["bytes_billed"], repairs=r["repairs"])
     return ai_common.store(ai_common.PORTFOLIO, "BIGQUERY_ASK", {"question": question}, response, extra)
 
 

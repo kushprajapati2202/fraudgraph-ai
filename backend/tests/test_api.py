@@ -136,3 +136,18 @@ def test_demo_token_enforced(client, monkeypatch):
 def test_unknown_api_route_is_json_404(client):
     res = client.get("/api/nope")
     assert res.status_code == 404 and res.json()["error"]["code"] == "NOT_FOUND"
+
+
+def test_audit_log_lists_events_with_case_titles(client):
+    log = client.get("/api/audit", params={"page_size": 5}).json()
+    assert log["total"] > 0 and len(log["items"]) <= 5
+    ids = [e["event_id"] for e in log["items"]]
+    assert ids == sorted(ids, reverse=True)
+    assert log["cases"], "analysis creates cases, so some events belong to cases"
+    case = log["cases"][0]
+    one = client.get("/api/audit", params={"case_id": case["case_id"], "page_size": 100}).json()
+    assert one["total"] == case["events"]
+    assert all(e["case_id"] == case["case_id"] and e["title"] == case["title"] for e in one["items"])
+    workspace = client.get("/api/audit", params={"case_id": "WORKSPACE"}).json()
+    assert workspace["total"] == log["workspace_events"]
+    assert all(e["case_id"] is None for e in workspace["items"])

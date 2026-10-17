@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   api,
   type CaseDetail,
-  type ContactScriptResult,
   type Evidence,
+  type GuardrailCheck,
+  type GuardrailTest,
   type Insight,
   type InvestigationResult,
   type LanguageCode,
@@ -11,11 +12,14 @@ import {
 } from "../api/client";
 import { useAiStatus } from "../health";
 import { fmtAmount, fmtTime } from "../util";
-import { Busy, copyText, downloadText, opinionDiff, SourceNote, Unavailable, useRun } from "./ai";
+import { Busy, opinionDiff, SourceNote, Unavailable, useRun } from "./ai";
 import { RiskBadge } from "./common";
 import { IconSparkle } from "./icons";
 import { useInspector } from "./Inspector";
 import { Citations } from "./InvestigatorPanel";
+import { ExpandButton, Modal } from "./Modal";
+import { downloadPdf } from "../pdf";
+import { usePrefs } from "../prefs";
 
 export const LANGUAGES: { code: LanguageCode; label: string; speech: string }[] = [
   { code: "en", label: "English", speech: "en-IN" },
@@ -28,7 +32,7 @@ export const LANGUAGES: { code: LanguageCode; label: string; speech: string }[] 
   { code: "kn", label: "ಕನ್ನಡ Kannada", speech: "kn-IN" },
 ];
 
-function AiHead({ id, title, chip }: { id: string; title: string; chip: string }) {
+function AiHead({ id, title, chip, children }: { id: string; title: string; chip: string; children?: ReactNode }) {
   return (
     <div className="card-head">
       <h2 id={id}>
@@ -37,7 +41,10 @@ function AiHead({ id, title, chip }: { id: string; title: string; chip: string }
         </span>{" "}
         {title}
       </h2>
-      <span className="chip chip-ai">{chip}</span>
+      <div className="card-tools">
+        <span className="chip chip-ai">{chip}</span>
+        {children}
+      </div>
     </div>
   );
 }
@@ -220,112 +227,6 @@ export function CounterfactualCard({ detail, onChanged }: { detail: CaseDetail; 
   );
 }
 
-function scriptText(s: ContactScriptResult): string {
-  return [
-    `Opening: ${s.opening}`,
-    "Questions:",
-    ...s.verification_questions.map((q, i) => `${i + 1}. ${q}`),
-    `If the customer confirms: ${s.if_confirmed}`,
-    `If the customer does not recognise the transfers: ${s.if_not_recognised}`,
-    `Closing: ${s.closing}`,
-    `SMS: ${s.sms_text}`,
-  ].join("\n");
-}
-
-/** Wording for the customer verification call or SMS. Filtered in code for secrets and tipping-off. */
-export function ContactScriptCard({ detail, onChanged }: { detail: CaseDetail; onChanged: () => void }) {
-  const rec = detail.ai_extras.CONTACT_SCRIPT;
-  const [account, setAccount] = useState(rec?.request.account_id ?? detail.suggested_contact_account ?? detail.case.accounts[0]);
-  const [channel, setChannel] = useState<string>(rec?.request.channel ?? "CALL");
-  const [lang, setLang] = useState<LanguageCode>((rec?.request.language as LanguageCode) ?? "en");
-  const [copied, setCopied] = useState(false);
-  const { busy, error, run } = useRun();
-  const ai = useAiStatus();
-  const s = rec?.response.result;
-  const removed = rec?.response.validation?.removed_sentences?.length ?? 0;
-  const verification = detail.actions.find((a) => a.action_code === "REQUEST_CUSTOMER_VERIFICATION" && a.status === "OPEN" && a.target_account === account);
-
-  return (
-    <section className="card ai-card" aria-labelledby="script-heading" data-tour="case-script">
-      <AiHead id="script-heading" title="Customer contact script" chip="AI draft · safety-filtered" />
-      <p className="muted small">
-        Wording for confirming the transfers with the account holder through a verified channel. Requests for OTPs or PINs, links, and anything that could tip the customer off are
-        removed in code. Nothing is sent from here.
-      </p>
-      <div className="row" style={{ marginTop: 8 }}>
-        <label className="grow">
-          <span className="label">Account holder</span>
-          <select value={account} onChange={(e) => setAccount(e.target.value)}>
-            {detail.case.accounts.map((id) => (
-              <option key={id} value={id}>{detail.accounts[id]?.holder_name ?? id} ({id})</option>
-            ))}
-          </select>
-        </label>
-        <label>
-          <span className="label">Channel</span>
-          <select value={channel} onChange={(e) => setChannel(e.target.value)}>
-            <option value="CALL">Phone call</option>
-            <option value="SMS">SMS</option>
-            <option value="EMAIL">Email</option>
-          </select>
-        </label>
-        <label>
-          <span className="label">Language</span>
-          <select value={lang} onChange={(e) => setLang(e.target.value as LanguageCode)}>
-            {LANGUAGES.map((l) => <option key={l.code} value={l.code}>{l.label}</option>)}
-          </select>
-        </label>
-      </div>
-      {verification ? <p className="small ok-text">Linked to the open verification task for this account.</p> : null}
-      <button
-        className="btn btn-primary"
-        style={{ marginTop: 8 }}
-        disabled={busy}
-        onClick={async () => {
-          if (await run(() => api.contactScript(detail.case.case_id, { account_id: account, channel, language: lang }))) {
-            onChanged();
-            ai.recheck();
-          }
-        }}
-      >
-        <IconSparkle size={14} /> {busy ? "Drafting..." : "Draft script"}
-      </button>
-      {busy ? <Busy label="Drafting and safety-checking the script..." /> : null}
-      {error ? <div className="callout callout-error" role="alert">{error}</div> : null}
-      {s && rec ? (
-        <div className="script stack-sm" style={{ marginTop: 12 }} lang={s.language} aria-live="polite">
-          <div className="muted small">
-            For {detail.accounts[s.account_id]?.holder_name ?? s.account_id} &middot; {s.channel.toLowerCase()} &middot; {LANGUAGES.find((l) => l.code === s.language)?.label}
-            {s.requested_language !== s.language ? " (template; the requested language needs Gemini)" : ""}
-          </div>
-          <div className="script-block"><span className="script-label">Opening</span>{s.opening}</div>
-          <div className="script-block">
-            <span className="script-label">Questions</span>
-            <ol className="ai-list">{s.verification_questions.map((q, i) => <li key={i}>{q}</li>)}</ol>
-          </div>
-          <div className="two-col">
-            <div className="script-block"><span className="script-label">If they confirm</span>{s.if_confirmed}</div>
-            <div className="script-block"><span className="script-label">If they do not recognise it</span>{s.if_not_recognised}</div>
-          </div>
-          <div className="script-block"><span className="script-label">Closing</span>{s.closing}</div>
-          <div className="script-block script-sms"><span className="script-label">SMS ({s.sms_text.length} chars)</span>{s.sms_text}</div>
-          <div className="callout callout-info small">
-            <strong>Before you call</strong>
-            <ul>{s.compliance_notes.map((n) => <li key={n}>{n}</li>)}</ul>
-          </div>
-          {removed ? <p className="small muted">The safety filter removed {removed} sentence{removed === 1 ? "" : "s"} from the draft.</p> : null}
-          <div className="row-center">
-            <button className="btn btn-small" onClick={() => copyText(scriptText(s)).then(() => setCopied(true)).catch(() => setCopied(false))}>
-              {copied ? "Copied" : "Copy script"}
-            </button>
-            <SourceNote rec={rec} />
-          </div>
-        </div>
-      ) : null}
-    </section>
-  );
-}
-
 function strMarkdown(s: StrDraftResult, nameOf: (id: string) => string): string {
   const lines = [
     `# Suspicious transaction report (draft) ${s.report_reference}`,
@@ -368,19 +269,82 @@ function strMarkdown(s: StrDraftResult, nameOf: (id: string) => string): string 
   return lines.join("\n");
 }
 
+/** The STR draft body; shown in the card and in the full-view pop-up (where every section starts open). */
+function StrDetails({ s, detail, allOpen = false }: { s: StrDraftResult; detail: CaseDetail; allOpen?: boolean }) {
+  const byId = useMemo(() => new Map<string, Evidence>(detail.evidence.map((e) => [e.evidence_id, e])), [detail.evidence]);
+  const nameOf = (id: string) => detail.accounts[id]?.holder_name ?? id;
+  return (
+    <>
+      <dl className="kv str-kv">
+        <dt>Reference</dt><dd className="mono">{s.report_reference}</dd>
+        <dt>Period</dt><dd>{fmtTime(s.period.from)} to {fmtTime(s.period.to)} UTC</dd>
+        <dt>Amount</dt><dd>{fmtAmount(s.total_amount)} across {s.transactions.length} transfers, {s.subjects.length} accounts</dd>
+      </dl>
+      <h3 className="section-title">Summary of suspicion</h3>
+      <p className="ai-summary">{s.summary_of_suspicion}</p>
+      {s.red_flags.length ? (
+        <div className="chip-row">
+          {s.red_flags.map((f) => <span key={f} className="chip chip-warn">{s.red_flag_labels[f] ?? f}</span>)}
+        </div>
+      ) : null}
+      <details open>
+        <summary className="section-title" style={{ cursor: "pointer" }}>Grounds ({s.grounds.length})</summary>
+        <ul className="ai-list" style={{ marginTop: 6 }}>
+          {s.grounds.map((g, i) => <li key={i}>{g.text} <Citations ids={g.evidence_ids} byId={byId} /></li>)}
+        </ul>
+      </details>
+      <details open={allOpen}>
+        <summary className="section-title" style={{ cursor: "pointer" }}>Sequence of events ({s.sequence_of_events.length})</summary>
+        <ol className="ai-list" style={{ marginTop: 6 }}>
+          {s.sequence_of_events.map((g, i) => <li key={i}>{g.text} <Citations ids={g.evidence_ids} byId={byId} /></li>)}
+        </ol>
+      </details>
+      <details open={allOpen}>
+        <summary className="section-title" style={{ cursor: "pointer" }}>Subjects, actions and gaps</summary>
+        <div className="table-scroll">
+          <table className="table compact" style={{ marginTop: 6 }}>
+            <thead><tr><th scope="col">Account</th><th scope="col">KYC</th><th scope="col">Opened</th><th scope="col" className="num">Sent</th><th scope="col" className="num">Received</th></tr></thead>
+            <tbody>
+              {s.subjects.map((a) => (
+                <tr key={a.account_id}>
+                  <td>{a.holder_name ?? a.account_id} <span className="mono small muted">{a.account_id}</span></td>
+                  <td className="small">{a.kyc_tier?.replace("_", " ").toLowerCase()}</td>
+                  <td className="small">{a.opened}</td>
+                  <td className="num tnum">{fmtAmount(a.sent)}</td>
+                  <td className="num tnum">{fmtAmount(a.received)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <h4 style={{ marginTop: 8 }}>Action taken</h4>
+        <ul className="ai-list">
+          {s.actions_taken.length ? s.actions_taken.map((a, i) => <li key={i}>{a.label}{a.target_account ? ` on ${nameOf(a.target_account)}` : ""} ({a.status.toLowerCase()})</li>) : <li>None recorded yet.</li>}
+        </ul>
+        <h4 style={{ marginTop: 8 }}>Information gaps</h4>
+        <ul className="ai-list">{s.information_gaps.map((g, i) => <li key={i}>{g}</li>)}</ul>
+      </details>
+    </>
+  );
+}
+
 /** STR-style draft for the compliance officer: record fields from the database, narrative drafted by Gemini. */
 export function StrDraftCard({ detail, onChanged }: { detail: CaseDetail; onChanged: () => void }) {
   const rec = detail.ai_extras.STR_DRAFT;
   const { busy, error, run } = useRun();
   const ai = useAiStatus();
-  const byId = useMemo(() => new Map<string, Evidence>(detail.evidence.map((e) => [e.evidence_id, e])), [detail.evidence]);
+  const [fullView, setFullView] = useState(false);
+  const closeFullView = useCallback(() => setFullView(false), []);
   const nameOf = (id: string) => detail.accounts[id]?.holder_name ?? id;
   const s = rec?.response.result;
   const unsupported = rec?.response.validation?.unsupported_claims?.length ?? 0;
+  const download = (r: StrDraftResult) => downloadPdf(`${r.report_reference}.pdf`, strMarkdown(r, nameOf), `STR draft ${r.report_reference}`);
 
   return (
-    <section className="card ai-card" aria-labelledby="str-heading" data-tour="case-str">
-      <AiHead id="str-heading" title="Regulatory report (STR draft)" chip="AI draft · compliance review" />
+    <section className="card ai-card" aria-labelledby="str-heading" data-tour="case-str" id="sec-str">
+      <AiHead id="str-heading" title="Regulatory report (STR draft)" chip="AI draft · compliance review">
+        {s ? <ExpandButton onClick={() => setFullView(true)} label="Open regulatory report in full view" /> : null}
+      </AiHead>
       <p className="muted small">
         A suspicious transaction report draft for the compliance officer. Subjects, transactions and actions come straight from the records; Gemini drafts the grounds and sequence,
         each with verified citations. It is not filed anywhere from here.
@@ -390,8 +354,8 @@ export function StrDraftCard({ detail, onChanged }: { detail: CaseDetail; onChan
           <IconSparkle size={14} /> {busy ? "Drafting..." : s ? "Redraft" : "Draft STR"}
         </button>
         {s ? (
-          <button className="btn" onClick={() => downloadText(`${s.report_reference}.md`, strMarkdown(s, nameOf))}>
-            Download draft
+          <button className="btn" onClick={() => download(s)}>
+            Download PDF
           </button>
         ) : null}
       </div>
@@ -399,58 +363,90 @@ export function StrDraftCard({ detail, onChanged }: { detail: CaseDetail; onChan
       {error ? <div className="callout callout-error" role="alert">{error}</div> : null}
       {s && rec ? (
         <div className="stack-sm" style={{ marginTop: 12 }} aria-live="polite">
-          <dl className="kv str-kv">
-            <dt>Reference</dt><dd className="mono">{s.report_reference}</dd>
-            <dt>Period</dt><dd>{fmtTime(s.period.from)} to {fmtTime(s.period.to)} UTC</dd>
-            <dt>Amount</dt><dd>{fmtAmount(s.total_amount)} across {s.transactions.length} transfers, {s.subjects.length} accounts</dd>
-          </dl>
-          <h3 className="section-title">Summary of suspicion</h3>
-          <p className="ai-summary">{s.summary_of_suspicion}</p>
-          {s.red_flags.length ? (
-            <div className="chip-row">
-              {s.red_flags.map((f) => <span key={f} className="chip chip-warn">{s.red_flag_labels[f] ?? f}</span>)}
-            </div>
-          ) : null}
-          <details open>
-            <summary className="section-title" style={{ cursor: "pointer" }}>Grounds ({s.grounds.length})</summary>
-            <ul className="ai-list" style={{ marginTop: 6 }}>
-              {s.grounds.map((g, i) => <li key={i}>{g.text} <Citations ids={g.evidence_ids} byId={byId} /></li>)}
-            </ul>
-          </details>
-          <details>
-            <summary className="section-title" style={{ cursor: "pointer" }}>Sequence of events ({s.sequence_of_events.length})</summary>
-            <ol className="ai-list" style={{ marginTop: 6 }}>
-              {s.sequence_of_events.map((g, i) => <li key={i}>{g.text} <Citations ids={g.evidence_ids} byId={byId} /></li>)}
-            </ol>
-          </details>
-          <details>
-            <summary className="section-title" style={{ cursor: "pointer" }}>Subjects, actions and gaps</summary>
-            <div className="table-scroll">
-              <table className="table compact" style={{ marginTop: 6 }}>
-                <thead><tr><th scope="col">Account</th><th scope="col">KYC</th><th scope="col">Opened</th><th scope="col" className="num">Sent</th><th scope="col" className="num">Received</th></tr></thead>
-                <tbody>
-                  {s.subjects.map((a) => (
-                    <tr key={a.account_id}>
-                      <td>{a.holder_name ?? a.account_id} <span className="mono small muted">{a.account_id}</span></td>
-                      <td className="small">{a.kyc_tier?.replace("_", " ").toLowerCase()}</td>
-                      <td className="small">{a.opened}</td>
-                      <td className="num tnum">{fmtAmount(a.sent)}</td>
-                      <td className="num tnum">{fmtAmount(a.received)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <h4 style={{ marginTop: 8 }}>Action taken</h4>
-            <ul className="ai-list">
-              {s.actions_taken.length ? s.actions_taken.map((a, i) => <li key={i}>{a.label}{a.target_account ? ` on ${nameOf(a.target_account)}` : ""} ({a.status.toLowerCase()})</li>) : <li>None recorded yet.</li>}
-            </ul>
-            <h4 style={{ marginTop: 8 }}>Information gaps</h4>
-            <ul className="ai-list">{s.information_gaps.map((g, i) => <li key={i}>{g}</li>)}</ul>
-          </details>
+          <StrDetails s={s} detail={detail} />
           {unsupported ? <div className="callout callout-warn small">{unsupported} statement(s) had no valid evidence and were left out.</div> : null}
           <p className="small muted">{s.draft_note}</p>
           <SourceNote rec={rec} />
+        </div>
+      ) : null}
+
+      {fullView && s && rec ? (
+        <Modal
+          title={<><span className="ai-mark" aria-hidden="true"><IconSparkle size={17} /></span> Regulatory report (STR draft)</>}
+          subtitle={<>{detail.case.case_id} &middot; <span className="mono">{s.report_reference}</span> &middot; {fmtTime(rec.created_at)} UTC</>}
+          onClose={closeFullView}
+          footer={
+            <div className="row-center" style={{ width: "100%", justifyContent: "space-between" }}>
+              <span className="chip chip-ai">AI draft &middot; compliance review</span>
+              <button className="btn btn-small" onClick={() => download(s)}>
+                Download PDF
+              </button>
+            </div>
+          }
+        >
+          <div className="stack-sm">
+            <StrDetails s={s} detail={detail} allOpen />
+            {unsupported ? <div className="callout callout-warn small">{unsupported} statement(s) had no valid evidence and were left out.</div> : null}
+            <p className="small muted">{s.draft_note}</p>
+          </div>
+        </Modal>
+      ) : null}
+    </section>
+  );
+}
+const GUARD_OUTCOME: Record<GuardrailCheck["outcome"], { label: string; color: string }> = {
+  BLOCKED: { label: "✓ Blocked", color: "var(--low)" },
+  CONTAINED: { label: "✓ Contained", color: "var(--low)" },
+  PASSED: { label: "✓ Kept", color: "var(--low)" },
+  FAILED: { label: "✗ Not stopped", color: "var(--high)" },
+};
+
+/** AI safety check: a tampered model response is run through the same checks as every real Gemini answer.
+ *  Each run is recorded in the audit trail with the analyst's name, as evidence for compliance and model-risk review. */
+export function GuardrailCard({ caseId, picker, onRan }: { caseId: string; picker?: ReactNode; onRan?: () => void }) {
+  const [result, setResult] = useState<GuardrailTest | null>(null);
+  const { busy, error, run } = useRun();
+  const { analystName } = usePrefs();
+  useEffect(() => setResult(null), [caseId]);
+  const verify = async () => {
+    const r = await run(() => api.guardrailTest(caseId, { actor_label: analystName || undefined }));
+    if (r) {
+      setResult(r);
+      onRan?.();
+    }
+  };
+  return (
+    <section className="card ai-card" aria-labelledby="guard-heading" id="sec-guardrails">
+      <AiHead id="guard-heading" title="Verify AI safety controls" chip="No model call · production checks" />
+      <p className="muted small">
+        Proves the assistant cannot cite evidence that does not exist, make claims without a source, or act outside a case. A deliberately
+        tampered AI answer is sent through exactly the checks every real Gemini response passes, and each run is recorded in the audit trail.
+      </p>
+      <div className="row-center" style={{ marginTop: 8, flexWrap: "wrap" }}>
+        {picker}
+        <button className="btn btn-primary" onClick={verify} disabled={busy || !caseId}>
+          {busy ? "Verifying..." : result ? "Run again" : "Run safety check"}
+        </button>
+      </div>
+      {error ? <div className="callout callout-error" role="alert">{error}</div> : null}
+      {result ? (
+        <div className="stack-sm" style={{ marginTop: 12 }} aria-live="polite">
+          <div className={`callout ${result.all_passed ? "callout-ok" : "callout-warn"}`} role="status">
+            <strong>{result.stopped} of {result.attacks} attacks stopped</strong>
+            <span className="small">, and the correctly cited control claim was kept. Evidence package: {result.evidence_sent} items.</span>
+          </div>
+          <ul className="cf-list">
+            {result.checks.map((c) => (
+              <li key={c.key} style={{ display: "block" }}>
+                <div className="row-center" style={{ justifyContent: "space-between", gap: 8 }}>
+                  <strong className="small">{c.title}</strong>
+                  <span className="small" style={{ color: GUARD_OUTCOME[c.outcome].color, fontWeight: 600 }}>{GUARD_OUTCOME[c.outcome].label}</span>
+                </div>
+                <div className="small muted">{c.attack}</div>
+                <div className="small">{c.detail}</div>
+              </li>
+            ))}
+          </ul>
         </div>
       ) : null}
     </section>

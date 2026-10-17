@@ -3,10 +3,11 @@ import { Link, NavLink, Navigate, Route, Routes, useLocation, useParams } from "
 import { api, type AiStatus } from "./api/client";
 import { AiStatusPill } from "./components/AiStatus";
 import GlobalSearch from "./components/GlobalSearch";
-import { IconCases, IconChevron, IconCog, IconMoon, IconNetwork, IconOverview, IconPlay, IconSimulator, IconSun, IconTransactions } from "./components/icons";
+import { IconAudit, IconCases, IconChevron, IconCog, IconMoon, IconNetwork, IconOverview, IconPlay, IconSimulator, IconSun, IconTransactions } from "./components/icons";
 import { InspectorProvider } from "./components/Inspector";
 import { TourProvider, useTour } from "./components/Tour";
 import { AiStatusContext, HealthContext } from "./health";
+import AuditPage from "./pages/Audit";
 import CaseDetailPage from "./pages/CaseDetail";
 import CasesPage from "./pages/Cases";
 import DashboardPage from "./pages/Dashboard";
@@ -23,6 +24,7 @@ const NAV = [
   { to: "/transactions", label: "Transactions", icon: IconTransactions },
   { to: "/network", label: "Network", icon: IconNetwork },
   { to: "/simulator", label: "Simulator", icon: IconSimulator },
+  { to: "/audit", label: "Audit", icon: IconAudit },
 ];
 
 function useAiStatusState() {
@@ -228,6 +230,7 @@ export default function App() {
                     <Route path="/network" element={<NetworkPage />} />
                     <Route path="/simulator" element={<WhatIfPage />} />
                     <Route path="/what-if" element={<Navigate to="/simulator" replace />} />
+                    <Route path="/audit" element={<AuditPage />} />
                     <Route path="/settings" element={<SettingsPage />} />
                     <Route path="*" element={<NotFound />} />
                   </Routes>

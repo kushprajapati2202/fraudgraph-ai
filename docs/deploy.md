@@ -62,7 +62,16 @@ On a free-trial account it is the safest choice: every service used here is avai
 
 SQLite in `/tmp` is the system of record, with one instance. After each change a consistent copy (SQLite backup API) is uploaded to `gs://<project>-fraudgraph/state/fraudgraph.db`; on start the service restores it. BigQuery holds a read-only mirror refreshed 15 seconds after changes. To scale beyond one instance, move `backend/db.py` to Cloud SQL for PostgreSQL; the analytics, ML and stream paths do not change.
 
+## Auto-deploy on push to main
+
+After the first `deploy.sh` run, a Cloud Build trigger can ship every push to `main`:
+
+1. Once, in the browser: [connect the GitHub repository to Cloud Build](https://console.cloud.google.com/cloud-build/triggers;region=global/connect) (GitHub, Cloud Build GitHub App), pick the repository and skip creating a trigger there.
+2. `bash scripts/setup-autodeploy.sh <PROJECT_ID>` creates a `fraudgraph-ai-deployer` service account (Cloud Run developer, Artifact Registry writer, and actAs on the app's service account only) and the trigger `fraudgraph-ai-main-deploy`.
+
+Each push runs `cloudbuild.yaml`: backend tests, then the image build, then the deploy, then a health check on `/api/health`. A failing test stops the release and the live revision keeps serving. The deploy replaces only the image; env vars, secrets and limits stay as `deploy.sh` set them, so run `deploy.sh` again when those change. Pushes that touch only docs, notes or the local Windows/WSL scripts do not trigger a build. Builds run on the default machine, within the Cloud Build free tier (2,500 build-minutes a month).
+
 ## Redeploy and remove
 
-- Redeploy after a code change: run the same command again.
+- Redeploy after a code change: push to `main` (with auto-deploy on) or run the same command again.
 - Remove: `gcloud run services delete fraudgraph-ai --region us-central1`, then delete the bucket, the `fraudgraph` dataset, the topic and subscription, the Document AI processor and the search app in the console.

@@ -60,9 +60,7 @@ Between steps 3 and 4 an analyst can also **verify a supporting document**: uplo
 
 Submission material:
 - [docs/pitch.md](docs/pitch.md): submission brief, demo script, likely judge questions
-- [docs/awards.md](docs/awards.md): readiness against each award, with honest gaps
 - [docs/deploy.md](docs/deploy.md): Cloud Run deployment with Vertex AI
-- [docs/social.md](docs/social.md): sharing kit for the public vote
 
 ## Product tour of the interface
 
@@ -148,7 +146,6 @@ All routes use the `/api` prefix and return JSON. Errors use `{"error": {"code",
 | `GET /transactions/{id}` | Record, rule assessment, linked cases, evidence ID |
 | `POST /transactions/demo` | Add a fictional transaction (validated; new accounts only in `AC-900..AC-999`). Controls in force are enforced: the response's `control` says whether it was `HELD` or `FLAGGED`. Needs the token when one is set. |
 | `POST /analysis/run` | `{scenario_id?, time_window_minutes?}` returns `analysis_id`, counts, `focus_case_ids` and a `diff` |
-| `GET /analysis/latest` | The last run and its diff |
 | `GET /graph` | `case_id`, `account_id`, or nothing (the flagged network) returns nodes, directed edges (one per transaction) and paths |
 | `GET /cases`, `GET /cases/{id}` | Case list and detail: signals, timeline, evidence, decisions, audit, AI history |
 | `POST /cases/{id}/investigate` | `{question?}` returns a validated Gemini investigation or the `UNAVAILABLE` fallback |
@@ -194,9 +191,9 @@ backend/   FastAPI app (api/, services/, models/, prompts/, tests/)
 frontend/  React + TypeScript + Vite UI (pages/, components/, graph/, api/)
 data/      deterministic synthetic CSVs + README (labels, scenarios, limitations)
 docs/      architecture.md, evaluation.md
-scripts/   generate_dataset.py, evaluate.py, smoke.ps1
+scripts/   generate_dataset.py, evaluate.py
            wsl/      setup.sh, dev.sh, check.sh, serve.sh (no-sudo WSL toolchain)
-           windows/  fg.ps1 (Windows entry point: WSL by default, -Native optional)
+           windows/  fg.ps1 (Windows entry point: WSL by default, -Native optional), smoke.ps1, screenshot.ps1
 .vscode/   tasks.json (setup / dev / check / serve / evaluate)
 ```
 

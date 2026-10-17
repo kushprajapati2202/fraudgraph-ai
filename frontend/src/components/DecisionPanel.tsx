@@ -121,13 +121,13 @@ export function DecisionPanel({ caseId, status, decisions, onSaved }: Props) {
 }
 
 // Same markers as the overview's activity feed.
-const ACTOR: Record<AuditEvent["actor_type"], { icon: ReactNode; label: string }> = {
+export const ACTOR: Record<AuditEvent["actor_type"], { icon: ReactNode; label: string }> = {
   SYSTEM: { icon: <IconRefresh size={14} />, label: "System" },
   AI: { icon: <IconSparkle size={14} />, label: "AI (advisory)" },
   HUMAN: { icon: <IconUser size={14} />, label: "Analyst" },
 };
 
-function describe(e: AuditEvent): string {
+export function describe(e: AuditEvent): string {
   const p = e.event_payload;
   switch (e.event_type) {
     case "CASE_CREATED":
@@ -160,35 +160,25 @@ function describe(e: AuditEvent): string {
       return `${e.event_type === "AI_CHAT" ? "Follow-up answer" : e.event_type === "AI_REPORT" ? "Escalation report draft" : "Investigation summary"}: ${p.status}${p.reason ? ` (${p.reason})` : ""}, model ${
         p.model ?? "-"
       }, ${p.prompt_version}${p.removed_evidence_ids?.length ? `, ${p.removed_evidence_ids.length} invalid citation(s) removed` : ""}.`;
+    case "AI_GUARDRAIL_TEST":
+      return `${p.actor_label} verified the AI safety controls: ${p.stopped} of ${p.attacks} tampered outputs stopped${
+        p.failed_checks?.length ? `; not stopped: ${p.failed_checks.join(", ")}` : ""
+      } (no model call, ${p.evidence_sent} evidence items).`;
     case "ANALYST_DECISION":
       return `${p.actor_label} recorded ${p.decision} (status ${p.status_before} → ${p.status_after}): “${p.rationale}”`;
+    // Workspace-level events (shown on the Audit page).
+    case "ANALYSIS_RUN":
+      return `Analysis ${p.analysis_id} scored ${p.transactions_analyzed} transfers with rules ${p.rule_version}; ${p.active_cases} active cases.`;
+    case "DEMO_RESET":
+      return `Dataset ${p.dataset_version} loaded (${p.transactions} transfers).`;
+    case "SYNTHETIC_TX_ADDED":
+      return `Simulated transfer ${p.transaction_id} added${p.created_accounts?.length ? `, new accounts ${p.created_accounts.join(", ")}` : ""}.`;
     default:
+      if (e.event_type.startsWith("AI_")) {
+        const what = e.event_type.slice(3).replace(/_/g, " ").toLowerCase();
+        const by = p.source === "GEMINI" ? "Gemini" : p.source === "RULES" ? "rules" : null;
+        return `AI ${what}: ${p.status ?? "-"}${by ? ` (${by})` : ""}${p.reason ? `, ${String(p.reason).replace(/_/g, " ").toLowerCase()}` : ""}.`;
+      }
       return e.event_type;
   }
-}
-
-export function AuditTimeline({ events }: { events: AuditEvent[] }) {
-  return (
-    <section className="card" aria-labelledby="audit-heading" data-tour="case-audit">
-      <div className="card-head">
-        <h2 id="audit-heading">Audit history</h2>
-      </div>
-      {events.length === 0 ? <p className="muted">No events yet.</p> : null}
-      <ol className="timeline">
-        {events.map((e) => (
-          <li key={e.event_id} className={`tl-${e.actor_type.toLowerCase()}`}>
-            <span className="tl-icon" aria-hidden="true">
-              {ACTOR[e.actor_type].icon}
-            </span>
-            <div>
-              <div className="small">
-                <strong>{ACTOR[e.actor_type].label}</strong> &middot; <span className="muted">{fmtTime(e.created_at)} UTC</span>
-              </div>
-              <div>{describe(e)}</div>
-            </div>
-          </li>
-        ))}
-      </ol>
-    </section>
-  );
 }

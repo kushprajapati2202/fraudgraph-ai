@@ -12,3 +12,4 @@ frontend/dist/
 .vscode/*
 !.vscode/tasks.json
 frontend/node_modules/.fraudgraph-platform
+notes/

@@ -117,13 +117,13 @@ const STEPS: Step[] = [
     route: "/cases/{case}",
     target: '[data-tour="case-report"]',
     title: "Escalation report in one click",
-    body: "Gemini drafts the internal report for compliance: roles, chronology, indicators, mitigating factors and gaps, with verified citations. Download the full case file to hand over.",
+    body: "Gemini drafts the internal report for compliance: roles, chronology, indicators, mitigating factors and gaps, with verified citations. Download the full case file as a PDF to hand over.",
   },
   {
     route: "/cases/{case}",
     target: '[data-tour="case-audit"]',
-    title: "Audit history",
-    body: "Every analysis run, AI response and human decision is logged in order, with separate markers for System, AI and Human.",
+    title: "View history",
+    body: "Opens the Audit page filtered to this case: every analysis run, AI response and human decision in order, with separate markers for System, AI and Human.",
   },
   {
     route: "/transactions",

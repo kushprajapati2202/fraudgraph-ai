@@ -38,6 +38,23 @@ def test_static_check_rejects(bq, sql, reason):
         bigquery_ask.static_check(sql)
 
 
+def test_ask_never_returns_the_query(bq, monkeypatch):
+    sql = "SELECT channel, COUNT(*) AS n FROM `proj.fg.transfers` GROUP BY channel"
+    replies = iter([
+        (bigquery_ask.SqlPlan(sql="DELETE FROM `proj.fg.transfers`", interpretation="x", chart="TABLE", x_column="", y_column=""), None, None),
+        (bigquery_ask.SqlPlan(sql=sql, interpretation="Transfers per channel", chart="BAR", x_column="channel", y_column="n"), None, None),
+        (bigquery_ask.SqlAnswer(answer="UPI has 42 transfers."), None, None),
+    ])
+    monkeypatch.setattr(bigquery_ask.ai_common, "ask", lambda *a, **k: next(replies))
+    monkeypatch.setattr(bigquery_ask, "_dry_run", lambda q: 1024)
+    monkeypatch.setattr(bigquery_ask, "_execute", lambda q: (["channel", "n"], [{"channel": "UPI", "n": 42}], 2048))
+    response = bigquery_ask.ask("transfers per channel")
+    result = response["result"]
+    assert "sql" not in result and result["repairs"] == 1
+    dumped = json.dumps(response)
+    assert "SELECT" not in dumped and "DELETE" not in dumped
+
+
 def test_grounded_answer_checks_numbers():
     rows = [{"channel": "UPI", "total": 1234567.0, "n": 42}]
     assert bigquery_ask.grounded_answer("UPI moved 1,234,567 across 42 transfers.", rows)

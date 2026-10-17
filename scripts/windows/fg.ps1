@@ -26,7 +26,7 @@ $ErrorActionPreference = "Stop"
 $Repo = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 
 if ($Command -eq "smoke") {
-    & (Join-Path $Repo "scripts\smoke.ps1") -BaseUrl $BaseUrl -DemoToken $DemoToken
+    & (Join-Path $Repo "scripts\windows\smoke.ps1") -BaseUrl $BaseUrl -DemoToken $DemoToken
     exit $LASTEXITCODE
 }
 

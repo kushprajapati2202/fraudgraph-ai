@@ -8,6 +8,7 @@ import { IconSparkle } from "./icons";
 import { useInspector } from "./Inspector";
 import { Citations } from "./InvestigatorPanel";
 import { ExpandButton, Modal, Toast } from "./Modal";
+import { downloadPdf } from "../pdf";
 
 interface Props {
   detail: CaseDetail;
@@ -17,7 +18,7 @@ interface Props {
 const key = (code: string, target: string | null) => `${code}|${target ?? ""}`;
 const inEffect = (a: ApprovedAction) => a.status === "ACTIVE" || a.status === "OPEN";
 
-/** Builds a self-contained Markdown case file: facts, rule findings, AI draft (if any), decisions and approved actions. */
+/** Builds the case file (as Markdown, rendered to PDF on download): facts, rule findings, AI draft (if any), decisions and approved actions. */
 function buildMarkdown(d: CaseDetail, labelOf: (code: string) => string, nameOf: (id: string | null) => string): string {
   const c = d.case;
   const r = d.latest_report?.response.status === "OK" ? d.latest_report.response.result : undefined;
@@ -239,17 +240,6 @@ function ControlledTransferItem({ transfer: t, caseId, onChanged }: { transfer: 
   );
 }
 
-function download(filename: string, text: string): void {
-  const url = URL.createObjectURL(new Blob([text], { type: "text/markdown;charset=utf-8" }));
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
-}
-
 function useLookups(detail: CaseDetail) {
   return useMemo(() => {
     const labels = new Map(detail.action_catalog.map((a) => [a.code, a.label]));
@@ -381,7 +371,7 @@ export function ReportPanel({ detail, onChanged }: Props) {
         <button className="btn btn-primary" onClick={draft} disabled={busy}>
           {busy ? "Drafting..." : r ? "Redraft report" : "Draft report with Gemini"}
         </button>
-        <button className="btn" onClick={() => download(`${detail.case.case_id}-case-file.md`, buildMarkdown(detail, labelOf, nameOf))}>
+        <button className="btn" onClick={() => downloadPdf(`${detail.case.case_id}-case-file.pdf`, buildMarkdown(detail, labelOf, nameOf), `Case file ${detail.case.case_id}`)}>
           Download case file
         </button>
       </div>
@@ -418,7 +408,7 @@ export function ReportPanel({ detail, onChanged }: Props) {
           footer={
             <div className="row-center" style={{ width: "100%", justifyContent: "space-between" }}>
               <span className="chip chip-ai">AI draft &middot; needs review</span>
-              <button className="btn btn-small" onClick={() => download(`${caseId}-case-file.md`, buildMarkdown(detail, labelOf, nameOf))}>
+              <button className="btn btn-small" onClick={() => downloadPdf(`${caseId}-case-file.pdf`, buildMarkdown(detail, labelOf, nameOf), `Case file ${caseId}`)}>
                 Download case file
               </button>
             </div>
