@@ -6,6 +6,7 @@ import { ErrorState, Loading } from "../components/common";
 import { useHealth } from "../health";
 import { usePrefs, type Theme } from "../prefs";
 import { errorMessage, fmtTime, useAsync, usePageTitle } from "../util";
+import RuleTuningCard from "../components/RuleTuning";
 
 const THEMES: { value: Theme; label: string }[] = [
   { value: "system", label: "System" },
@@ -181,6 +182,8 @@ export default function SettingsPage() {
           <p className="muted small" style={{ padding: "12px 18px 16px" }}>{rules.data?.note}</p>
         </section>
       </div>
+
+      <RuleTuningCard />
 
       <section className="card card-flush" aria-labelledby="eval-heading">
         <div className="card-head">

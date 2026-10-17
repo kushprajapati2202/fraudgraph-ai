@@ -42,11 +42,20 @@ DOCUMENT_SYSTEM_PROMPT = (
     "Dates must be YYYY-MM-DD. Amounts are plain numbers without currency symbols or separators. "
     "List in tamper_indicators only concrete visible anomalies (misaligned text, inconsistent fonts, arithmetic "
     "that does not add up, mismatched totals); leave it empty if you see none. Do not judge whether the document "
-    "is genuine or whether anyone committed fraud. Return only JSON matching the schema."
+    "is genuine or whether anyone committed fraud. In regions, give a bounding box for where each extracted field "
+    "(kind FIELD: amount, date, payer, payee, reference) and each tamper indicator (kind ANOMALY) appears, as "
+    "box_2d [ymin, xmin, ymax, xmax] scaled 0-1000; leave regions empty for a PDF or if you cannot locate them. "
+    "Return only JSON matching the schema."
 )
 
 
-class DocumentExtraction(BaseModel):
+class DocumentRegion(BaseModel):
+    label: str
+    kind: Literal["FIELD", "ANOMALY"]
+    box_2d: list[int]
+
+
+class _ExtractionFields(BaseModel):
     document_type: str
     issuer_name: str
     payer_name: str
@@ -59,6 +68,29 @@ class DocumentExtraction(BaseModel):
     legibility: Literal["CLEAR", "PARTIAL", "UNREADABLE"]
     observations: list[str]
     tamper_indicators: list[str]
+
+
+class DocumentExtractionSchema(_ExtractionFields):
+    """Sent to Gemini as the response schema (the Gemini API does not accept default values)."""
+    regions: list[DocumentRegion]
+
+
+class DocumentExtraction(_ExtractionFields):
+    """Validation of the reply; tolerant of a reply without regions."""
+    regions: list[DocumentRegion] = []
+
+
+def clean_regions(regions: list[dict]) -> list[dict]:
+    """Keep well-formed boxes inside the 0-1000 frame; drop the rest."""
+    out = []
+    for r in regions[:12]:
+        box = r.get("box_2d") or []
+        if len(box) != 4 or not all(isinstance(v, int) and 0 <= v <= 1000 for v in box):
+            continue
+        ymin, xmin, ymax, xmax = box
+        if ymin < ymax and xmin < xmax:
+            out.append({"label": str(r.get("label") or "").strip()[:80], "kind": r.get("kind"), "box_2d": box})
+    return out
 
 
 class DocumentError(Exception):
@@ -170,7 +202,8 @@ def analyse(raw: bytes, mime_type: str, tx: dict, source_name: str | None, desti
               "It was submitted to explain a bank transfer; do not assume it is genuine.")
     for attempt in range(2):
         try:
-            text = gemini_service.generate_json(DOCUMENT_SYSTEM_PROMPT, prompt, DocumentExtraction, attachment=(raw, mime_type))
+            text = gemini_service.generate_json(DOCUMENT_SYSTEM_PROMPT, prompt, DocumentExtractionSchema,
+                                                attachment=(raw, mime_type))
         except gemini_service.GeminiUnavailable as exc:
             return {"status": "UNAVAILABLE", "reason": exc.reason, "detail": exc.detail,
                     "message": gemini_service.UNAVAILABLE_MESSAGES.get(exc.reason, exc.reason),
@@ -184,6 +217,7 @@ def analyse(raw: bytes, mime_type: str, tx: dict, source_name: str | None, desti
             extraction[key] = (extraction[key] or "").strip()[:200]
         for key in ("reference_numbers", "observations", "tamper_indicators"):
             extraction[key] = [str(x).strip()[:300] for x in extraction[key][:8] if str(x).strip()]
+        extraction["regions"] = clean_regions(extraction["regions"]) if mime_type != "application/pdf" else []
         checks = compare(extraction, tx, source_name, destination_name)
         return {"status": "OK", "model": gemini_service._model_used.get() or settings.gemini_model,
                 "prompt_version": gemini_service.PROMPT_VERSION, "extraction": extraction, "checks": checks,

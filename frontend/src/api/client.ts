@@ -159,6 +159,8 @@ export interface CaseSummary {
   created_at: string;
   updated_at: string;
   latest_decision: { decision: DecisionValue; created_at: string } | null;
+  /** Review priority from the latest Gemini investigation, for the "second opinion" chip. */
+  ai_priority?: RiskBand | null;
   total_amount: number;
   first_activity: string | null;
   last_activity: string | null;
@@ -304,6 +306,7 @@ export interface DocumentRecord {
       legibility: string;
       observations: string[];
       tamper_indicators: string[];
+      regions?: { label: string; kind: "FIELD" | "ANOMALY"; box_2d: [number, number, number, number] }[];
     };
     checks?: { check: string; result: "MATCH" | "PARTIAL" | "MISMATCH" | "NOT_FOUND"; document: string; record: string; note: string }[];
   };
@@ -381,8 +384,195 @@ export interface AIRecord<T> {
   response: AIResponse<T>;
 }
 
+/** Response of the AI features beyond the investigation. source RULES = rule-based (Gemini not asked or unavailable). */
+export interface InsightResponse<T> {
+  status: "OK" | "UNAVAILABLE";
+  source: "GEMINI" | "RULES" | null;
+  model: string | null;
+  prompt_version: string;
+  result?: T;
+  validation?: { removed_ids: string[]; removed_sentences?: string[]; unsupported_claims?: { section: string; text: string }[] };
+  fallback_reason?: string | null;
+  reason?: string;
+  message?: string | null;
+  detail?: string | null;
+}
+
+export interface Insight<T> {
+  insight_id: number | null;
+  scope: string;
+  kind: string;
+  created_at: string;
+  stale: boolean;
+  request: Record<string, any>;
+  response: InsightResponse<T>;
+}
+
+export interface BriefingResult {
+  headline: string;
+  summary: string;
+  highlights: { text: string; case_ids: string[] }[];
+  next_actions: { case_id: string; action: string; reason: string }[];
+}
+
+export interface PatternCluster {
+  pattern_id: string;
+  case_ids: string[];
+  size: number;
+  name: string;
+  summary: string;
+  watch_for: string;
+  common_signal_labels: string[];
+  amount_text: string;
+  total_amount: number;
+  accounts: number;
+  highest_band: RiskBand;
+  shared_accounts: string[];
+  shared_devices: string[];
+  named_by?: "GEMINI";
+}
+
+export interface PatternsResult {
+  overview: string;
+  method: "GEMINI_EMBEDDINGS" | "SIGNAL_OVERLAP";
+  case_count: number;
+  patterns: PatternCluster[];
+}
+
+export interface DayExplanationResult {
+  headline: string;
+  explanation: string;
+  drivers: { text: string; case_ids: string[] }[];
+  facts: { day: string; transfers: number; flagged: number; flagged_amount_text: string; median_flagged_per_day: number; flagged_vs_median: number | null; peak_hour_utc: string | null };
+}
+
+export interface QueryPlan {
+  target: "TRANSFERS" | "CASES" | "ACCOUNTS";
+  min_amount: number;
+  max_amount: number;
+  channels: string[];
+  risk_bands: RiskBand[];
+  case_statuses: CaseStatus[];
+  signal_codes: string[];
+  account_ids: string[];
+  flagged_only: boolean;
+  new_account_days: number;
+  min_kyc_only: boolean;
+  account_side: "ANY" | "SENDER" | "RECEIVER";
+  date_from: string;
+  date_to: string;
+  sort: string;
+  limit: number;
+}
+
+export interface AskResult {
+  question: string;
+  plan: QueryPlan;
+  interpretation: string;
+  plan_summary: string;
+  unsupported: string;
+  rows: Record<string, any>[];
+  total: number;
+  total_amount: number;
+}
+
+export interface TuningSuggestion {
+  parameter: string;
+  current_value: number;
+  proposed_value: number;
+  rationale: string;
+  rule: string;
+  rule_label: string;
+  meaning: string;
+  impact: {
+    flagged_before: number;
+    flagged_after: number;
+    cases_before: number;
+    cases_after: number;
+    dismissed_cases_cleared: string[];
+    escalated_cases_lost: string[];
+    open_cases_cleared: string[];
+  };
+}
+
+export interface RuleTuningResult {
+  summary: string;
+  suggestions: TuningSuggestion[];
+  decided_cases: number;
+  signals: { code: string; label: string; flagged_transfers: number; decided_cases: number; escalated: number; dismissed: number; needs_evidence: number }[];
+  applied: false;
+  note: string;
+}
+
+export interface NarrationResult {
+  overview: string;
+  takeaway: string;
+  steps: { step: number; transaction_id: string; caption: string }[];
+}
+
+export interface CounterfactualResult {
+  summary: string;
+  points: { text: string; transaction_ids: string[] }[];
+  facts: {
+    current_score: number;
+    current_band: RiskBand;
+    queue_threshold: number;
+    remove_one_transfer: { step: number; transaction_id: string; from: string; to: string; amount_text: string; score_without: number; band_without: RiskBand; change: number; would_leave_queue: boolean }[];
+    turn_off_one_rule: { code: string; label: string; context_only: boolean; score_without: number; band_without: RiskBand; change: number }[];
+  };
+}
+
+export type LanguageCode = "en" | "hi" | "gu" | "mr" | "ta" | "te" | "bn" | "kn";
+
+export interface ContactScriptResult {
+  opening: string;
+  verification_questions: string[];
+  if_confirmed: string;
+  if_not_recognised: string;
+  closing: string;
+  sms_text: string;
+  language: LanguageCode;
+  requested_language: LanguageCode;
+  compliance_notes: string[];
+  account_id: string;
+  channel: "CALL" | "SMS" | "EMAIL";
+}
+
+export interface StrDraftResult {
+  report_reference: string;
+  reporting_entity: string;
+  period: { from: string | null; to: string | null };
+  total_amount: number;
+  subjects: { account_id: string; holder_name: string | null; account_number: string | null; account_type: string | null; kyc_tier: string | null; city: string | null; opened: string | null; sent: number; received: number }[];
+  transactions: { transaction_id: string; timestamp: string; from: string; to: string; amount: number; currency: string; channel: string; reference: string | null; score: number | null }[];
+  actions_taken: { label: string; target_account: string | null; status: string; approved_by: string; approved_at: string }[];
+  analyst_decision: { decision: DecisionValue; rationale: string; by: string; at: string } | null;
+  summary_of_suspicion: string;
+  grounds: { text: string; evidence_ids: string[] }[];
+  red_flags: string[];
+  red_flag_labels: Record<string, string>;
+  sequence_of_events: { text: string; evidence_ids: string[] }[];
+  information_gaps: string[];
+  draft_note: string;
+}
+
+export interface TranslationResult {
+  summary: string;
+  key_points: string[];
+  next_steps: string[];
+  language: LanguageCode;
+}
+
 export interface CaseDetail {
   case: CaseSummary & { transaction_ids: string[]; accounts: string[]; analysis_id: string };
+  ai_extras: Partial<{
+    NARRATION: Insight<NarrationResult>;
+    COUNTERFACTUAL: Insight<CounterfactualResult>;
+    CONTACT_SCRIPT: Insight<ContactScriptResult>;
+    STR_DRAFT: Insight<StrDraftResult>;
+    TRANSLATION: Insight<TranslationResult>;
+  }>;
+  suggested_contact_account: string | null;
   accounts: Record<string, AccountInfo>;
   transactions: CaseTransaction[];
   signal_summary: {
@@ -516,6 +706,7 @@ export interface Dashboard {
     total_amount: number;
     first_activity: string | null;
     origin_name: string | null;
+    ai_priority: RiskBand | null;
   })[];
   last_analysis: {
     analysis_id: string;
@@ -703,4 +894,21 @@ export const api = {
     request<{ transfer: TransferControl }>("POST", `/api/cases/${encodeURIComponent(id)}/held-transfers/${encodeURIComponent(transactionId)}`, body),
   decide: (id: string, body: { decision: DecisionValue; rationale: string; actor_label?: string }) =>
     request<{ decision: DecisionRecord; case_status: CaseStatus }>("POST", `/api/cases/${encodeURIComponent(id)}/decision`, body),
+  // Workspace AI
+  briefing: () => request<Insight<BriefingResult>>("GET", "/api/ai/briefing"),
+  makeBriefing: () => request<Insight<BriefingResult>>("POST", "/api/ai/briefing"),
+  patterns: () => request<Insight<PatternsResult>>("GET", "/api/ai/patterns"),
+  makePatterns: () => request<Insight<PatternsResult>>("POST", "/api/ai/patterns"),
+  explainDay: (day: string, refresh = false) => request<Insight<DayExplanationResult>>("POST", "/api/ai/explain-day", { day, refresh }),
+  askPortfolio: (question: string) => request<Insight<AskResult>>("POST", "/api/ai/ask", { question }),
+  ruleTuning: () => request<Insight<RuleTuningResult>>("GET", "/api/ai/rule-tuning"),
+  makeRuleTuning: () => request<Insight<RuleTuningResult>>("POST", "/api/ai/rule-tuning"),
+  // Case assistants
+  narrate: (id: string) => request<Insight<NarrationResult>>("POST", `/api/cases/${encodeURIComponent(id)}/narrate`),
+  counterfactual: (id: string) => request<Insight<CounterfactualResult>>("POST", `/api/cases/${encodeURIComponent(id)}/counterfactual`),
+  contactScript: (id: string, body: { account_id: string; channel: string; language: LanguageCode }) =>
+    request<Insight<ContactScriptResult>>("POST", `/api/cases/${encodeURIComponent(id)}/contact-script`, body),
+  strDraft: (id: string) => request<Insight<StrDraftResult>>("POST", `/api/cases/${encodeURIComponent(id)}/str`),
+  translate: (id: string, language: LanguageCode) =>
+    request<Insight<TranslationResult>>("POST", `/api/cases/${encodeURIComponent(id)}/translate`, { language }),
 };

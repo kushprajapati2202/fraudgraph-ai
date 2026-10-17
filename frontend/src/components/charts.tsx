@@ -21,10 +21,10 @@ function niceMax(v: number): number {
  * Daily transfers as stacked bars on one axis (transfers per day): the flagged portion sits on the baseline in the
  * strong tone, other transfers above it in the soft tone. Hover or focus a day for exact values.
  */
-export function ActivityChart({ data }: { data: DayPoint[] }) {
+export function ActivityChart({ data, selected, onSelect, height = 470 }: { data: DayPoint[]; selected?: string | null; onSelect?: (day: string) => void; height?: number }) {
   const [hover, setHover] = useState<number | null>(null);
   const W = 760;
-  const H = 470;
+  const H = height;
   const pad = { l: 34, r: 8, t: 10, b: 24 };
   const iw = W - pad.l - pad.r;
   const ih = H - pad.t - pad.b;
@@ -55,7 +55,7 @@ export function ActivityChart({ data }: { data: DayPoint[] }) {
           const gap = d.flagged > 0 && otherH > 0 ? 2 : 0;
           return (
             <g key={d.day}>
-              {hover === i ? <rect className="chart-hover" x={pad.l + i * step} y={pad.t} width={step} height={ih} /> : null}
+              {hover === i || selected === d.day ? <rect className={selected === d.day ? "chart-hover chart-selected" : "chart-hover"} x={pad.l + i * step} y={pad.t} width={step} height={ih} /> : null}
               {otherH > 0 ? <rect className="chart-bar-bg" x={x} y={y(d.transactions)} width={bw} height={Math.max(0, otherH - gap)} rx={2} /> : null}
               {d.flagged > 0 ? <rect className="chart-bar" x={x} y={y(d.flagged)} width={bw} height={Math.max(2, flaggedH)} rx={2} /> : null}
               {i % labelEvery === 0 ? (
@@ -70,7 +70,16 @@ export function ActivityChart({ data }: { data: DayPoint[] }) {
                 width={step}
                 height={ih}
                 tabIndex={0}
-                aria-label={`${fmtDay(d.day)}: ${d.transactions} transfers, ${d.flagged} flagged`}
+                aria-label={`${fmtDay(d.day)}: ${d.transactions} transfers, ${d.flagged} flagged${onSelect ? ". Press Enter to explain this day" : ""}`}
+                role={onSelect ? "button" : undefined}
+                style={onSelect ? { cursor: "pointer" } : undefined}
+                onClick={() => onSelect?.(d.day)}
+                onKeyDown={(e) => {
+                  if (onSelect && (e.key === "Enter" || e.key === " ")) {
+                    e.preventDefault();
+                    onSelect(d.day);
+                  }
+                }}
                 onMouseEnter={() => setHover(i)}
                 onFocus={() => setHover(i)}
                 onBlur={() => setHover(null)}

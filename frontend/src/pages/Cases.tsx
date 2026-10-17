@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { api } from "../api/client";
+import { SecondOpinion } from "../components/ai";
 import { Empty, ErrorState, Loading, ScoreRing, StatusChip } from "../components/common";
 import { IconSearch } from "../components/icons";
 import { caseHeadline, fmtAmount, fmtDuration, fmtTime, plural, useAsync, usePageTitle } from "../util";
@@ -147,6 +148,7 @@ export default function CasesPage() {
                       <td className="small nowrap">{fmtDuration(c.first_activity, c.last_activity)}</td>
                       <td>
                         <StatusChip status={c.status} />
+                        <div><SecondOpinion rule={c.risk_band} ai={c.ai_priority} compact /></div>
                       </td>
                       <td className="small nowrap tnum">{fmtTime(c.first_activity)}</td>
                     </tr>

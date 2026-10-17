@@ -2,6 +2,8 @@ import { useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api } from "../api/client";
 import { AccountControlTags, Avatar, ControlTag, ErrorState, Loading, RiskBadge, ScoreRing, StatusChip, SyntheticTag } from "../components/common";
+import { Busy, SecondOpinion, SourceNote, useRun } from "../components/ai";
+import { ContactScriptCard, CounterfactualCard, StrDraftCard } from "../components/CaseAssist";
 import { AuditTimeline, DecisionPanel } from "../components/DecisionPanel";
 import DocumentPanel from "../components/Documents";
 import EvidenceList from "../components/EvidenceList";
@@ -10,6 +12,7 @@ import InvestigatorPanel from "../components/InvestigatorPanel";
 import { ActionsPanel, ReportPanel } from "../components/Mitigation";
 import SimilarCases from "../components/SimilarCases";
 import NetworkGraph from "../graph/NetworkGraph";
+import { IconSparkle } from "../components/icons";
 import { useHealth } from "../health";
 import { caseHeadline, fmtAmount, fmtDuration, fmtTime, useAsync, usePageTitle } from "../util";
 
@@ -20,10 +23,17 @@ export default function CaseDetailPage() {
   const health = useHealth();
   const { openTransaction, openEvidence, openAccount } = useInspector();
   const [pathId, setPathId] = useState<string>("");
+  const [playToken, setPlayToken] = useState(0);
+  const narrating = useRun();
 
   const paths = graph.data?.paths ?? [];
   const highlight = useMemo(() => paths.find((p) => p.evidence_id === pathId)?.transaction_ids ?? [], [paths, pathId]);
   const evidenceById = useMemo(() => new Map((detail.data?.evidence ?? []).map((e) => [e.evidence_id, e])), [detail.data]);
+  const narration = detail.data?.ai_extras.NARRATION;
+  const captions = useMemo(
+    () => Object.fromEntries((narration?.response.result?.steps ?? []).map((s) => [s.transaction_id, s.caption])),
+    [narration],
+  );
   usePageTitle(detail.data ? `${caseId} · ${caseHeadline(detail.data.case.title)}` : caseId);
 
   if (detail.loading && !detail.data) return <Loading label="Loading case" />;
@@ -32,6 +42,14 @@ export default function CaseDetailPage() {
   const c = d.case;
   const refresh = () => detail.reload();
   const firstTs = c.first_activity;
+  const narrated = narration?.response.result;
+
+  async function narrate() {
+    if (await narrating.run(() => api.narrate(c.case_id))) {
+      await detail.reload();
+      setPlayToken((n) => n + 1);
+    }
+  }
 
   return (
     <div className="stack">
@@ -61,6 +79,7 @@ export default function CaseDetailPage() {
             <a href="#sec-graph">Graph</a>
             <a href="#sec-accounts">Accounts</a>
             <a href="#sec-signals">Signals</a>
+            <a href="#sec-drivers">Score drivers</a>
             <a href="#sec-similar">Similar cases</a>
             <a href="#sec-timeline">Timeline</a>
             <a href="#sec-evidence">Evidence</a>
@@ -68,6 +87,7 @@ export default function CaseDetailPage() {
         </div>
         <div className="case-hero-side">
           <StatusChip status={c.status} />
+          <SecondOpinion rule={c.risk_band} ai={d.latest_investigation?.response.result?.review_priority} />
           <p className="small muted">The score ranks review priority. It is not a probability of fraud or a finding against anyone.</p>
         </div>
       </header>
@@ -87,6 +107,10 @@ export default function CaseDetailPage() {
                 <h2 id="graph-heading">Money flow</h2>
                 <div className="card-sub">Each arrow is one transfer. Click an arrow for the record, or an account for its profile.</div>
               </div>
+              <div className="row-center">
+              <button className="btn btn-small btn-ai" onClick={narrate} disabled={narrating.busy} title="Gemini writes a caption for each step, then the flow replays">
+                <IconSparkle size={14} /> {narrating.busy ? "Narrating..." : narrated ? "Replay narrated flow" : "Narrate flow"}
+              </button>
               {paths.length ? (
                 <label className="inline">
                   <span className="label" style={{ margin: 0 }}>Trace path</span>
@@ -100,12 +124,25 @@ export default function CaseDetailPage() {
                   </select>
                 </label>
               ) : null}
+              </div>
             </div>
+            {narrating.busy ? <Busy label="Gemini is narrating the flow..." /> : null}
+            {narrating.error ? <div className="callout callout-error" role="alert">{narrating.error}</div> : null}
+            {narrated && narration ? (
+              <div className="narration" aria-live="polite">
+                <span className="ai-mark"><IconSparkle size={15} /></span>
+                <div>
+                  <div>{narrated.overview}</div>
+                  <div className="small muted">{narrated.takeaway}</div>
+                  <SourceNote rec={narration} />
+                </div>
+              </div>
+            ) : null}
             {graph.loading && !graph.data ? <Loading label="Loading graph" /> : null}
             {graph.error ? <ErrorState message={graph.error} onRetry={graph.reload} /> : null}
             {graph.data ? (
               <>
-                <NetworkGraph data={graph.data} highlightTxIds={highlight} height={520} onEdgeClick={openTransaction} onNodeClick={openAccount} />
+                <NetworkGraph data={graph.data} highlightTxIds={highlight} height={520} onEdgeClick={openTransaction} onNodeClick={openAccount} captions={captions} playToken={playToken} />
                 {pathId && evidenceById.get(pathId) ? (
                   <button className="link-button small" onClick={() => openEvidence(evidenceById.get(pathId)!)}>
                     Open {pathId} as evidence
@@ -210,6 +247,8 @@ export default function CaseDetailPage() {
             ) : null}
           </section>
 
+          <CounterfactualCard detail={d} onChanged={refresh} />
+
           <SimilarCases caseId={c.case_id} catalog={d.action_catalog} />
 
           <section className="card card-flush" aria-labelledby="timeline-heading" id="sec-timeline">
@@ -288,12 +327,16 @@ export default function CaseDetailPage() {
             latest={d.latest_investigation}
             chats={d.chat_history}
             geminiConfigured={health?.gemini_configured ?? null}
+            ruleBand={c.risk_band}
+            translation={d.ai_extras.TRANSLATION}
             onChanged={refresh}
           />
           <DocumentPanel detail={d} onChanged={refresh} />
           <ActionsPanel detail={d} onChanged={refresh} />
+          <ContactScriptCard detail={d} onChanged={refresh} />
           <DecisionPanel caseId={c.case_id} status={c.status} decisions={d.decisions} onSaved={refresh} />
           <ReportPanel detail={d} onChanged={refresh} />
+          <StrDraftCard detail={d} onChanged={refresh} />
           <AuditTimeline events={d.audit_events} />
         </div>
       </div>

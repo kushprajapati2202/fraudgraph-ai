@@ -144,6 +144,28 @@ class CloseActionRequest(BaseModel):
     actor_label: str | None = Field(default=None, max_length=60, pattern=r"^[A-Za-z0-9 _.\-]+$")
 
 
+LanguageCode = Literal["en", "hi", "gu", "mr", "ta", "te", "bn", "kn"]
+
+
+class ExplainDayRequest(BaseModel):
+    day: str = Field(pattern=r"^\d{4}-\d{2}-\d{2}$")
+    refresh: bool = False
+
+
+class AskRequest(BaseModel):
+    question: str = Field(min_length=3, max_length=300)
+
+
+class ContactScriptRequest(BaseModel):
+    account_id: str = Field(pattern=r"^AC-\d{3,4}$")
+    channel: Literal["CALL", "SMS", "EMAIL"] = "CALL"
+    language: LanguageCode = "en"
+
+
+class TranslateRequest(BaseModel):
+    language: LanguageCode
+
+
 class HeldTransferRequest(BaseModel):
     resolution: Literal["RELEASE", "REJECT"]
     note: str = Field(min_length=5, max_length=500)

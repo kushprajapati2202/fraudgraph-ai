@@ -1,8 +1,9 @@
 import { useState, type FormEvent } from "react";
-import { api, type AIRecord, type ChatResult, type Evidence, type InvestigationResult } from "../api/client";
+import { api, type AIRecord, type ChatResult, type Evidence, type Insight, type InvestigationResult, type RiskBand, type TranslationResult } from "../api/client";
 import { useAiStatus } from "../health";
 import { errorMessage, fmtTime } from "../util";
 import { RiskBadge } from "./common";
+import { SecondOpinionNote, TranslatePanel } from "./CaseAssist";
 import { useInspector } from "./Inspector";
 
 interface Props {
@@ -11,6 +12,8 @@ interface Props {
   latest: AIRecord<InvestigationResult> | null;
   chats: AIRecord<ChatResult>[];
   geminiConfigured: boolean | null;
+  ruleBand: RiskBand;
+  translation?: Insight<TranslationResult>;
   onChanged: () => void;
 }
 
@@ -35,7 +38,7 @@ export function Citations({ ids, byId }: { ids: string[]; byId: Map<string, Evid
   );
 }
 
-export default function InvestigatorPanel({ caseId, evidence, latest, chats, geminiConfigured, onChanged }: Props) {
+export default function InvestigatorPanel({ caseId, evidence, latest, chats, geminiConfigured, ruleBand, translation, onChanged }: Props) {
   const [question, setQuestion] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -151,6 +154,8 @@ export default function InvestigatorPanel({ caseId, evidence, latest, chats, gem
             <span>AI review priority recommendation:</span> <RiskBadge band={result.review_priority} />
             <span className="muted">(not a decision)</span>
           </div>
+          <SecondOpinionNote band={ruleBand} result={result} />
+          <TranslatePanel caseId={caseId} record={translation} investigation={result} />
 
           {validation && (validation.removed_ids.length > 0 || validation.unsupported_claims.length > 0) ? (
             <div className="callout callout-warn" role="status">

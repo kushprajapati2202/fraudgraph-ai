@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { api, type AuditEvent } from "../api/client";
+import { SecondOpinion } from "../components/ai";
 import { ActivityChart, BandMix, HBars } from "../components/charts";
+import { AskPortfolio, BriefingCard, DayExplain, PatternsCard } from "../components/DashboardAi";
 import { Empty, ErrorState, Loading, ScoreRing, StatusChip } from "../components/common";
 import { IconCases, IconChevron, IconFlow, IconLock, IconRefresh, IconSparkle, IconTransactions, IconUser } from "../components/icons";
 import { usePrefs } from "../prefs";
@@ -45,6 +47,22 @@ function activityText(e: FeedEvent): string {
       return p.status === "OK" ? "Gemini answered a follow-up question" : "Gemini follow-up unavailable";
     case "AI_REPORT":
       return p.status === "OK" ? "Gemini drafted an escalation report" : "Escalation report draft unavailable";
+    case "AI_BRIEFING":
+      return p.source === "GEMINI" ? "Gemini wrote the shift briefing" : "Shift briefing refreshed (rule-based)";
+    case "AI_PATTERNS":
+      return `${p.source === "GEMINI" ? "Gemini" : "Rules"} grouped active cases into ${p.patterns} pattern${p.patterns === 1 ? "" : "s"}`;
+    case "AI_NARRATION":
+      return p.source === "GEMINI" ? "Gemini narrated the money flow" : "Money flow narrated (rule-based)";
+    case "AI_COUNTERFACTUAL":
+      return "Score drivers analysed (what the priority rests on)";
+    case "AI_CONTACT_SCRIPT":
+      return `Customer contact script drafted for ${p.account_id}`;
+    case "AI_STR_DRAFT":
+      return p.source === "GEMINI" ? "Gemini drafted an STR for compliance" : "STR draft prepared (rule-based)";
+    case "AI_TRANSLATION":
+      return p.status === "OK" ? `Investigation summary translated (${p.language})` : "Translation unavailable";
+    case "AI_RULE_TUNING":
+      return `${p.suggestions} rule-tuning suggestion${p.suggestions === 1 ? "" : "s"} simulated (not applied)`;
     case "MITIGATION_ACTION_APPROVED":
       return `${p.actor_label} approved: ${p.label}`;
     case "MITIGATION_ACTION_CLOSED":
@@ -70,6 +88,8 @@ export default function DashboardPage() {
   const dash = useAsync(() => api.dashboard(), []);
   const { analystName } = usePrefs();
   const [windowMin, setWindowMin] = useState(60);
+  const [day, setDay] = useState<string | null>(null);
+  const [aiKey, setAiKey] = useState(0);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -82,6 +102,7 @@ export default function DashboardPage() {
       const r = await api.runAnalysis({ time_window_minutes: windowMin });
       setNotice(`Analysis ${r.analysis_id} complete: ${r.transactions_analyzed.toLocaleString()} transfers scored, ${r.active_cases} active cases.`);
       dash.reload();
+      setAiKey((k) => k + 1);
     } catch (e) {
       setError(errorMessage(e));
     } finally {
@@ -95,6 +116,7 @@ export default function DashboardPage() {
   const t = d.totals;
   const m = d.mitigation;
   const flagRate = t.transactions ? (t.flagged_transactions / t.transactions) * 100 : 0;
+
 
   return (
     <div className="stack">
@@ -136,6 +158,8 @@ export default function DashboardPage() {
       {notice ? <div className="callout callout-ok" role="status">{notice}</div> : null}
       {error ? <div className="callout callout-error" role="alert">{error}</div> : null}
 
+      <AskPortfolio />
+
       <div className="kpis" data-tour="dash-stats">
         <div className="kpi">
           <span className="kpi-label"><span className="kpi-icon tone-high"><IconCases size={16} /></span> Open cases</span>
@@ -161,39 +185,7 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      <div className="grid-main">
-        <section className="card" aria-labelledby="activity-heading">
-          <div className="card-head">
-            <div>
-              <h2 id="activity-heading">Transfer activity</h2>
-              <div className="card-sub">Transfers per day, with the portion flagged for review</div>
-            </div>
-          </div>
-          <ActivityChart data={d.activity_by_day} />
-        </section>
-        <div className="stack">
-          <section className="card" aria-labelledby="mix-heading">
-            <div className="card-head">
-              <h2 id="mix-heading">Cases by priority</h2>
-            </div>
-            <BandMix counts={d.cases_by_band} />
-            <p className="muted small" style={{ marginTop: 12 }}>
-              Priority bands come from transparent rules (Low 0-29, Medium 30-59, High 60-100). They rank review order and are not fraud probabilities.
-            </p>
-          </section>
-          <section className="card" aria-labelledby="signals-heading">
-            <div className="card-head">
-              <div>
-                <h2 id="signals-heading">Signals on flagged transfers</h2>
-                <div className="card-sub">How often each rule fired</div>
-              </div>
-            </div>
-            <HBars items={d.top_signals.map((s) => ({ key: s.code, label: s.label, value: s.count }))} unit="transfers" />
-          </section>
-        </div>
-      </div>
-
-      <div className="grid-main">
+      <div className="grid-main grid-even">
         <section className="card card-flush" aria-labelledby="queue-heading" data-tour="dash-cases">
           <div className="card-head">
             <div>
@@ -225,6 +217,7 @@ export default function DashboardPage() {
                     <span className="queue-amount">
                       {fmtAmount(c.total_amount)}
                       <div><StatusChip status={c.status} /></div>
+                      <div><SecondOpinion rule={c.risk_band} ai={c.ai_priority} compact /></div>
                     </span>
                     <span className="queue-chevron"><IconChevron size={16} /></span>
                   </Link>
@@ -232,8 +225,43 @@ export default function DashboardPage() {
               ))}
             </ul>
           )}
+          <div className="queue-foot">
+            <h3 id="mix-heading" className="section-title">Cases by priority</h3>
+            <BandMix counts={d.cases_by_band} />
+            <p className="muted small" style={{ marginTop: 8 }}>
+              Bands come from transparent rules (Low 0-29, Medium 30-59, High 60-100). They rank review order and are not fraud probabilities.
+            </p>
+          </div>
         </section>
+        <BriefingCard refreshKey={aiKey} />
+      </div>
 
+      <div className="grid-main grid-even">
+        <section className="card" aria-labelledby="activity-heading">
+          <div className="card-head">
+            <div>
+              <h2 id="activity-heading">Transfer activity</h2>
+              <div className="card-sub">Transfers per day, with the portion flagged for review. Click a day for an AI explanation.</div>
+            </div>
+          </div>
+          <ActivityChart data={d.activity_by_day} selected={day} onSelect={setDay} height={260} />
+          <DayExplain day={day} />
+        </section>
+        <div className="stack">
+          <section className="card" aria-labelledby="signals-heading">
+            <div className="card-head">
+              <div>
+                <h2 id="signals-heading">Signals on flagged transfers</h2>
+                <div className="card-sub">How often each rule fired</div>
+              </div>
+            </div>
+            <HBars items={d.top_signals.map((s) => ({ key: s.code, label: s.label, value: s.count }))} unit="transfers" />
+          </section>
+        </div>
+      </div>
+
+      <div className="grid-main grid-even">
+        <PatternsCard refreshKey={aiKey} />
         <section className="card" aria-labelledby="feed-heading">
           <div className="card-head">
             <h2 id="feed-heading">Recent activity</h2>

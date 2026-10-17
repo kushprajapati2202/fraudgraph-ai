@@ -17,6 +17,10 @@ interface Props {
   compact?: boolean;
   onEdgeClick?: (txId: string) => void;
   onNodeClick?: (accountId: string) => void;
+  /** AI narration per transfer, shown under the factual caption during replay. */
+  captions?: Record<string, string>;
+  /** Changing this number starts the replay from the first transfer. */
+  playToken?: number;
 }
 
 type Band = "high" | "medium" | "low" | "none";
@@ -57,7 +61,7 @@ interface Tip {
   hint: string;
 }
 
-export default function NetworkGraph({ data, highlightTxIds = [], height = 480, compact = false, onEdgeClick, onNodeClick }: Props) {
+export default function NetworkGraph({ data, highlightTxIds = [], height = 480, compact = false, onEdgeClick, onNodeClick, captions, playToken }: Props) {
   const container = useRef<HTMLDivElement>(null);
   const cyRef = useRef<Core | null>(null);
   const handlers = useRef({ onEdgeClick, onNodeClick });
@@ -376,11 +380,15 @@ export default function NetworkGraph({ data, highlightTxIds = [], height = 480, 
       const done = window.setTimeout(() => setStep(null), 2600);
       return () => window.clearTimeout(done);
     }
-    const next = window.setTimeout(() => setStep(step + 1), 1100);
+    // Narrated steps stay up long enough to read the caption.
+    const next = window.setTimeout(() => setStep(step + 1), captions?.[ordered[step]?.id] ? 3200 : 1100);
     return () => window.clearTimeout(next);
-  }, [step, ordered.length]);
+  }, [step, ordered, captions]);
 
   useEffect(() => setStep(null), [data, showContext]);
+  useEffect(() => {
+    if (playToken) setStep(0);
+  }, [playToken]);
 
   const zoom = (factor: number) => {
     const cy = cyRef.current;
@@ -439,6 +447,12 @@ export default function NetworkGraph({ data, highlightTxIds = [], height = 480, 
             <span className="caption-step">Step {step! + 1} of {ordered.length}</span>
             <strong>{nameOf(current.source)}</strong> paid <strong>{nameOf(current.target)}</strong> {fmtAmount(current.amount, current.currency)}
             <span className="muted"> at {fmtTime(current.timestamp).slice(11)}</span>
+            {captions?.[current.id] ? (
+              <span className="caption-ai">
+                <span aria-hidden="true">{"✦"} </span>
+                {captions[current.id]}
+              </span>
+            ) : null}
           </div>
         ) : null}
         {tip ? (

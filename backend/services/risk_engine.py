@@ -43,6 +43,20 @@ FAN_IN_MIN_COUNT = 4
 FAN_IN_MIN_SENDERS = 3
 SHARED_DEVICE_MIN_ACCOUNTS = 3
 
+# Thresholds that rule-tuning suggestions may change in a simulation, with the bounds a suggestion must respect.
+TUNABLE = {
+    "UNUSUAL_RATIO_MIN": {"rule": "UNUSUAL_AMOUNT", "value": UNUSUAL_RATIO_MIN, "min": 2.0, "max": 6.0, "step": 0.5,
+                          "meaning": "How many times the sender's usual (90th-percentile) amount a transfer must be"},
+    "VELOCITY_MIN_COUNT": {"rule": "VELOCITY", "value": VELOCITY_MIN_COUNT, "min": 3, "max": 8, "step": 1,
+                           "meaning": "Outgoing transfers within the window before velocity fires"},
+    "ONWARD_PARTIAL_RATIO": {"rule": "RAPID_ONWARD", "value": ONWARD_PARTIAL_RATIO, "min": 0.3, "max": 0.7, "step": 0.05,
+                             "meaning": "Share of an amount moved onward within 30 minutes for half weight"},
+    "FAN_IN_MIN_COUNT": {"rule": "FAN_IN_RAPID_OUT", "value": FAN_IN_MIN_COUNT, "min": 3, "max": 8, "step": 1,
+                         "meaning": "Inbound transfers before an outbound one for many-in / rapid-out"},
+    "SHARED_DEVICE_MIN_ACCOUNTS": {"rule": "SHARED_DEVICE", "value": SHARED_DEVICE_MIN_ACCOUNTS, "min": 2, "max": 6,
+                                   "step": 1, "meaning": "Accounts on one device before shared-device context fires"},
+}
+
 BAND_THRESHOLDS = {"LOW": 0, "MEDIUM": 30, "HIGH": 60}
 CASE_MIN_SCORE = BAND_THRESHOLDS["MEDIUM"]
 
@@ -149,15 +163,20 @@ def _signal(code: str, value: float, explanation: str, supporting: list[str], pa
     }
 
 
-def _ratio_value(ratio: float) -> float:
+def _ratio_value(ratio: float, partial: float = ONWARD_PARTIAL_RATIO) -> float:
     if ratio >= ONWARD_FULL_RATIO:
         return 1.0
-    if ratio >= ONWARD_PARTIAL_RATIO:
+    if ratio >= partial:
         return 0.5
     return 0.0
 
 
-def assess(tx: Tx, ctx: RiskContext, window_minutes: int = DEFAULT_WINDOW_MINUTES) -> dict:
+def assess(tx: Tx, ctx: RiskContext, window_minutes: int = DEFAULT_WINDOW_MINUTES,
+           overrides: dict | None = None) -> dict:
+    """Score one transfer. `overrides` replaces TUNABLE thresholds (used only by rule-tuning simulations)."""
+    p = {k: v["value"] for k, v in TUNABLE.items()} | (overrides or {})
+    UNUSUAL_RATIO_MIN, VELOCITY_MIN_COUNT = p["UNUSUAL_RATIO_MIN"], p["VELOCITY_MIN_COUNT"]  # noqa: N806
+    FAN_IN_MIN_COUNT, SHARED_DEVICE_MIN_ACCOUNTS = p["FAN_IN_MIN_COUNT"], p["SHARED_DEVICE_MIN_ACCOUNTS"]  # noqa: N806
     signals: list[dict] = []
     uncertainties: list[str] = []
     window = timedelta(minutes=window_minutes)
@@ -205,7 +224,8 @@ def assess(tx: Tx, ctx: RiskContext, window_minutes: int = DEFAULT_WINDOW_MINUTE
         before = [t for t in ctx.incoming[tx.src].between(tx.ts - onward, tx.ts, hi_inclusive=False) if t.id != tx.id]
         ratio_a = sum(t.amount for t in after) / tx.amount
         ratio_b = sum(t.amount for t in before) / tx.amount
-        value_a, value_b = _ratio_value(ratio_a), _ratio_value(ratio_b)
+        value_a = _ratio_value(ratio_a, p["ONWARD_PARTIAL_RATIO"])
+        value_b = _ratio_value(ratio_b, p["ONWARD_PARTIAL_RATIO"])
         if max(value_a, value_b) > 0:
             parts, supporting = [], [tx.id]
             if value_a > 0:
@@ -220,7 +240,8 @@ def assess(tx: Tx, ctx: RiskContext, window_minutes: int = DEFAULT_WINDOW_MINUTE
                 "RAPID_ONWARD", max(value_a, value_b), "; ".join(parts) + ".",
                 supporting,
                 {"onward_window_minutes": ONWARD_WINDOW_MINUTES, "ratio_after": round(ratio_a, 3),
-                 "ratio_before": round(ratio_b, 3), "full_ratio": ONWARD_FULL_RATIO, "partial_ratio": ONWARD_PARTIAL_RATIO},
+                 "ratio_before": round(ratio_b, 3), "full_ratio": ONWARD_FULL_RATIO,
+                 "partial_ratio": p["ONWARD_PARTIAL_RATIO"]},
             ))
 
     # FAN_IN_RAPID_OUT: many inbound transfers to the source shortly before this outbound transfer
@@ -273,10 +294,11 @@ def assess(tx: Tx, ctx: RiskContext, window_minutes: int = DEFAULT_WINDOW_MINUTE
     }
 
 
-def assess_all(rows: list[dict], window_minutes: int = DEFAULT_WINDOW_MINUTES) -> dict[str, dict]:
+def assess_all(rows: list[dict], window_minutes: int = DEFAULT_WINDOW_MINUTES,
+               overrides: dict | None = None) -> dict[str, dict]:
     txs = [Tx.from_row(r) for r in rows]
     ctx = RiskContext(txs)
-    return {tx.id: assess(tx, ctx, window_minutes) for tx in ctx.txs}
+    return {tx.id: assess(tx, ctx, window_minutes, overrides) for tx in ctx.txs}
 
 
 def rules_description() -> list[dict]:

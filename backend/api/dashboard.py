@@ -2,6 +2,7 @@ import json
 
 from fastapi import APIRouter
 
+from backend.api.cases import _latest_ai_priority
 from backend.db import connect, get_meta, row_to_dict
 from backend.services import mitigation
 from backend.services.risk_engine import CASE_MIN_SCORE, LABELS
@@ -46,6 +47,7 @@ def dashboard() -> dict:
             d["total_amount"] = agg["total"]
             d["first_activity"] = agg["first"]
             d["origin_name"] = origin["holder_name"] if origin else None
+            d["ai_priority"] = _latest_ai_priority(conn, d["case_id"])
             queue.append(d)
 
         last_run = row_to_dict(conn.execute(
@@ -75,7 +77,9 @@ def dashboard() -> dict:
             "FROM audit_events e LEFT JOIN cases c ON c.case_id = e.case_id "
             "WHERE e.event_type IN ('ANALYST_DECISION', 'AI_INVESTIGATION', 'AI_CHAT', 'ANALYSIS_RUN', "
             "'SYNTHETIC_TX_ADDED', 'CASE_UPDATED', 'AI_REPORT', 'MITIGATION_ACTION_APPROVED', 'MITIGATION_ACTION_CLOSED', "
-            "'TRANSFER_HELD', 'TRANSFER_FLAGGED', 'HELD_TRANSFER_RESOLVED') ORDER BY e.event_id DESC LIMIT 8"
+            "'TRANSFER_HELD', 'TRANSFER_FLAGGED', 'HELD_TRANSFER_RESOLVED', 'AI_BRIEFING', 'AI_PATTERNS', "
+            "'AI_NARRATION', 'AI_COUNTERFACTUAL', 'AI_CONTACT_SCRIPT', 'AI_STR_DRAFT', 'AI_TRANSLATION', "
+            "'AI_RULE_TUNING') ORDER BY e.event_id DESC LIMIT 8"
         ):
             d = dict(r)
             d["event_payload"] = json.loads(d["event_payload"])

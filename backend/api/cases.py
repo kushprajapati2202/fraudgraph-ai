@@ -9,7 +9,7 @@ import re
 
 from backend.models.schemas import (DECISION_TO_STATUS, ActionRequest, ChatRequest, CloseActionRequest, DecisionRequest,
                                     DocumentRequest, HeldTransferRequest, InvestigateRequest)
-from backend.services import audit, document_check, gemini_service, mitigation, similarity
+from backend.services import ai_common, audit, case_ai, document_check, gemini_service, mitigation, similarity
 
 router = APIRouter(tags=["cases"])
 
@@ -106,8 +106,41 @@ def list_cases(
             last = conn.execute("SELECT decision, created_at FROM analyst_decisions WHERE case_id = ? "
                                 "ORDER BY decision_id DESC LIMIT 1", (d["case_id"],)).fetchone()
             d["latest_decision"] = dict(last) if last else None
+            d["ai_priority"] = _latest_ai_priority(conn, d["case_id"])
             items.append(d)
     return {"items": items, "total": len(items)}
+
+
+def _case_transactions(conn, case: dict) -> list[dict]:
+    """The case's transfers in time order, with their score, signals, control status and holder names."""
+    marks = ",".join("?" * len(case["transaction_ids"]))
+    txs = []
+    for r in conn.execute(
+        f"SELECT t.*, ra.score, ra.risk_band, ra.signals_json, ra.uncertainties_json, tc.status AS control_status, "
+        f"sa.holder_name AS source_name, da.holder_name AS destination_name FROM transactions t "
+        f"LEFT JOIN risk_assessments ra ON ra.transaction_id = t.transaction_id "
+        f"LEFT JOIN transfer_controls tc ON tc.transaction_id = t.transaction_id "
+        f"LEFT JOIN accounts sa ON sa.account_id = t.source_account "
+        f"LEFT JOIN accounts da ON da.account_id = t.destination_account "
+        f"WHERE t.transaction_id IN ({marks}) ORDER BY t.timestamp, t.transaction_id", case["transaction_ids"]):
+        d = dict(r)
+        d["signals"] = json.loads(d.pop("signals_json") or "[]")
+        d["uncertainties"] = json.loads(d.pop("uncertainties_json") or '{"uncertainties": []}')["uncertainties"]
+        txs.append(d)
+    return txs
+
+
+def _account_info(conn, account_ids: list[str]) -> dict[str, dict]:
+    marks = ",".join("?" * len(account_ids))
+    return {r["account_id"]: dict(r) for r in conn.execute(
+        f"SELECT account_id, holder_name, account_type, city, kyc_tier, created_at, account_number FROM accounts "
+        f"WHERE account_id IN ({marks})", account_ids)}
+
+
+def _latest_ai_priority(conn, case_id: str) -> str | None:
+    row = conn.execute("SELECT result_json FROM ai_investigations WHERE case_id = ? AND kind = 'INVESTIGATION' "
+                       "AND status = 'OK' ORDER BY investigation_id DESC LIMIT 1", (case_id,)).fetchone()
+    return (json.loads(row["result_json"]).get("result") or {}).get("review_priority") if row else None
 
 
 @router.get("/cases/{case_id}")
@@ -115,19 +148,7 @@ def get_case(case_id: str) -> dict:
     with connect() as conn:
         case = _case_row(conn, case_id)
         marks = ",".join("?" * len(case["transaction_ids"]))
-        txs = []
-        for r in conn.execute(
-            f"SELECT t.*, ra.score, ra.risk_band, ra.signals_json, ra.uncertainties_json, tc.status AS control_status, "
-            f"sa.holder_name AS source_name, da.holder_name AS destination_name FROM transactions t "
-            f"LEFT JOIN risk_assessments ra ON ra.transaction_id = t.transaction_id "
-            f"LEFT JOIN transfer_controls tc ON tc.transaction_id = t.transaction_id "
-            f"LEFT JOIN accounts sa ON sa.account_id = t.source_account "
-            f"LEFT JOIN accounts da ON da.account_id = t.destination_account "
-            f"WHERE t.transaction_id IN ({marks}) ORDER BY t.timestamp, t.transaction_id", case["transaction_ids"]):
-            d = dict(r)
-            d["signals"] = json.loads(d.pop("signals_json") or "[]")
-            d["uncertainties"] = json.loads(d.pop("uncertainties_json") or '{"uncertainties": []}')["uncertainties"]
-            txs.append(d)
+        txs = _case_transactions(conn, case)
         labels = [dict(r) for r in conn.execute(
             f"SELECT scenario_id, label, COUNT(*) AS n FROM labels WHERE transaction_id IN ({marks}) "
             f"GROUP BY scenario_id, label", case["transaction_ids"])]
@@ -139,10 +160,7 @@ def get_case(case_id: str) -> dict:
             d["event_payload"] = json.loads(d["event_payload"])
             events.append(d)
         case.update(_case_stats(conn, case["transaction_ids"]))
-        acc_marks = ",".join("?" * len(case["accounts"]))
-        account_info = {r["account_id"]: dict(r) for r in conn.execute(
-            f"SELECT account_id, holder_name, account_type, city, kyc_tier, created_at, account_number FROM accounts "
-            f"WHERE account_id IN ({acc_marks})", case["accounts"])}
+        account_info = _account_info(conn, case["accounts"])
         investigation = _investigations(conn, case_id, "INVESTIGATION", 1)
         report = _investigations(conn, case_id, "REPORT", 1)
         documents = []
@@ -159,6 +177,7 @@ def get_case(case_id: str) -> dict:
                 {k: control[k] for k in ("action_id", "action_code", "label", "case_id", "created_at", "expires_at")})
         chats = list(reversed(_investigations(conn, case_id, "CHAT", 20)))
         evidence = _evidence(conn, case_id)
+        ai_extras = ai_common.latest_by_kind(conn, case_id)
 
     signal_summary: dict[str, dict] = {}
     for t in txs:
@@ -187,6 +206,8 @@ def get_case(case_id: str) -> dict:
         "action_catalog": mitigation.catalog(),
         "documents": documents,
         "chat_history": chats,
+        "ai_extras": ai_extras,
+        "suggested_contact_account": case_ai.suggested_contact(case, txs, actions),
         "ground_truth": labels,
         "ground_truth_note": "Synthetic scenario labels for evaluation only; not used by the risk engine or Gemini.",
     }

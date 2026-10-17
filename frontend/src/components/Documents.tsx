@@ -31,7 +31,34 @@ function readBase64(file: File): Promise<string> {
   });
 }
 
-function DocumentResult({ doc }: { doc: DocumentRecord }) {
+/** The uploaded image with Gemini's boxes for each field it read (blue) and each visible anomaly (red). */
+function RegionPreview({ src, regions }: { src: string; regions: NonNullable<NonNullable<DocumentRecord["response"]["extraction"]>["regions"]> }) {
+  return (
+    <figure className="doc-preview">
+      <div className="doc-frame">
+        <img src={src} alt="Uploaded document with highlighted regions" />
+        {regions.map((r, i) => {
+          const [ymin, xmin, ymax, xmax] = r.box_2d;
+          return (
+            <span
+              key={i}
+              className={`doc-box ${r.kind === "ANOMALY" ? "doc-box-anomaly" : "doc-box-field"}`}
+              style={{ top: `${ymin / 10}%`, left: `${xmin / 10}%`, height: `${(ymax - ymin) / 10}%`, width: `${(xmax - xmin) / 10}%` }}
+              title={r.label}
+            >
+              <span className="doc-box-label">{r.label}</span>
+            </span>
+          );
+        })}
+      </div>
+      <figcaption className="small muted">
+        <span className="legend-key doc-key-field" /> Field read by Gemini &nbsp; <span className="legend-key doc-key-anomaly" /> Visible anomaly. Shown for this session only; the file is not stored.
+      </figcaption>
+    </figure>
+  );
+}
+
+function DocumentResult({ doc, preview }: { doc: DocumentRecord; preview?: string }) {
   const r = doc.response;
   if (r.status !== "OK" || !r.extraction) {
     return (
@@ -87,6 +114,12 @@ function DocumentResult({ doc }: { doc: DocumentRecord }) {
         </tbody>
       </table>
       {e.purpose ? <div className="small" style={{ marginTop: 6 }}><span className="muted">Stated purpose:</span> {e.purpose}</div> : null}
+      {preview && e.regions?.length ? <RegionPreview src={preview} regions={e.regions} /> : null}
+      {!preview && e.regions?.some((r) => r.kind === "ANOMALY") ? (
+        <div className="small muted" style={{ marginTop: 6 }}>
+          Anomalies were located on the page ({e.regions.filter((r) => r.kind === "ANOMALY").map((r) => r.label).join("; ")}). Upload the file again to see them highlighted.
+        </div>
+      ) : null}
       {e.tamper_indicators.length ? (
         <div className="callout callout-warn small" style={{ marginTop: 8 }}>
           <strong>Visible anomalies noted by the AI:</strong>
@@ -110,6 +143,7 @@ export default function DocumentPanel({ detail, onChanged }: { detail: CaseDetai
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [previews, setPreviews] = useState<Record<number, string>>({});
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -120,7 +154,11 @@ export default function DocumentPanel({ detail, onChanged }: { detail: CaseDetai
     setError(null);
     try {
       const data = await readBase64(file);
-      await api.verifyDocument(detail.case.case_id, { filename: file.name, mime_type: file.type, data_base64: data, transaction_id: txId, actor_label: analystName });
+      const rec = await api.verifyDocument(detail.case.case_id, { filename: file.name, mime_type: file.type, data_base64: data, transaction_id: txId, actor_label: analystName });
+      if (file.type.startsWith("image/")) {
+        const url = URL.createObjectURL(file);
+        setPreviews((p) => ({ ...p, [rec.document_id]: url }));
+      }
       setFile(null);
       if (fileRef.current) fileRef.current.value = "";
       onChanged();
@@ -144,7 +182,7 @@ export default function DocumentPanel({ detail, onChanged }: { detail: CaseDetai
         <span className="chip chip-ai">Gemini vision</span>
       </div>
       <p className="muted small">
-        Upload an invoice, receipt or agreement that explains a transfer. Gemini reads the document; the comparison with the transfer record is done by fixed
+        Upload an invoice, receipt or agreement that explains a transfer. Gemini reads the document and marks where it found each field and any visible anomaly; the comparison with the transfer record is done by fixed
         rules, so the result is repeatable. A match supports the stated purpose. It does not prove the document is genuine.
       </p>
       <form className="stack-sm" onSubmit={submit} style={{ marginTop: 10 }}>
@@ -175,7 +213,7 @@ export default function DocumentPanel({ detail, onChanged }: { detail: CaseDetai
       {detail.documents.length ? (
         <ul className="doc-list" aria-live="polite">
           {detail.documents.map((d) => (
-            <DocumentResult key={d.document_id} doc={d} />
+            <DocumentResult key={d.document_id} doc={d} preview={previews[d.document_id]} />
           ))}
         </ul>
       ) : null}
