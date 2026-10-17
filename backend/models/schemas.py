@@ -33,6 +33,10 @@ class DecisionRequest(BaseModel):
     actor_label: str | None = Field(default=None, max_length=60, pattern=r"^[A-Za-z0-9 _.\-]+$")
 
 
+class GuardrailTestRequest(BaseModel):
+    actor_label: str | None = Field(default=None, max_length=60, pattern=r"^[A-Za-z0-9 _.\-]+$")
+
+
 class InvestigateRequest(BaseModel):
     question: str | None = Field(default=None, max_length=500)
 

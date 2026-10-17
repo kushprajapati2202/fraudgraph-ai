@@ -160,6 +160,10 @@ export function describe(e: AuditEvent): string {
       return `${e.event_type === "AI_CHAT" ? "Follow-up answer" : e.event_type === "AI_REPORT" ? "Escalation report draft" : "Investigation summary"}: ${p.status}${p.reason ? ` (${p.reason})` : ""}, model ${
         p.model ?? "-"
       }, ${p.prompt_version}${p.removed_evidence_ids?.length ? `, ${p.removed_evidence_ids.length} invalid citation(s) removed` : ""}.`;
+    case "AI_GUARDRAIL_TEST":
+      return `${p.actor_label} verified the AI safety controls: ${p.stopped} of ${p.attacks} tampered outputs stopped${
+        p.failed_checks?.length ? `; not stopped: ${p.failed_checks.join(", ")}` : ""
+      } (no model call, ${p.evidence_sent} evidence items).`;
     case "ANALYST_DECISION":
       return `${p.actor_label} recorded ${p.decision} (status ${p.status_before} → ${p.status_after}): “${p.rationale}”`;
     // Workspace-level events (shown on the Audit page).

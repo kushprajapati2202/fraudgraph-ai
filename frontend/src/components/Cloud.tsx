@@ -202,7 +202,7 @@ export function PolicyCard({ caseId }: { caseId: string }) {
   );
 }
 
-// ---- Overview: Ask BigQuery (Gemini writes SQL, code gates it) ----
+// ---- Overview: Ask BigQuery (Gemini writes the query, code gates it; the query itself is never shown) ----
 
 const BQ_EXAMPLES = [
   "Total amount and transfer count by channel for flagged transfers",
@@ -231,12 +231,12 @@ export function AskBigQueryCard({ embedded = false }: { embedded?: boolean }) {
   return (
     <Wrap className={embedded ? "bq-embedded" : "card ai-card"} aria-labelledby={embedded ? undefined : "bq-heading"} id="sec-bigquery">
       {embedded ? (
-        <p className="muted small" style={{ marginTop: 0 }}>Gemini writes the SQL; it only runs after a read-only check and a BigQuery dry run.</p>
+        <p className="muted small" style={{ marginTop: 0 }}>Answers come straight from the analytics data. Every query is read-only and checked before it runs.</p>
       ) : (
         <div className="card-head">
           <div>
             <AiTitle id="bq-heading">Ask BigQuery</AiTitle>
-            <div className="card-sub">Gemini writes the SQL; it only runs after a read-only check and a BigQuery dry run</div>
+            <div className="card-sub">Answers come straight from the analytics data. Every query is read-only and checked before it runs</div>
           </div>
           <span className="chip">BigQuery</span>
         </div>
@@ -261,7 +261,7 @@ export function AskBigQueryCard({ embedded = false }: { embedded?: boolean }) {
           </button>
         ))}
       </div>
-      {busy ? <Busy label="Writing and checking the query" /> : null}
+      {busy ? <Busy label="Looking up the answer" /> : null}
       {error ? <ErrorState message={error} /> : null}
       {rec ? <Unavailable rec={rec} what="Gemini" /> : null}
       {r ? (
@@ -303,15 +303,14 @@ export function AskBigQueryCard({ embedded = false }: { embedded?: boolean }) {
           )}
           <details style={{ marginTop: 10 }}>
             <summary className="small" style={{ cursor: "pointer", color: "var(--muted)", fontWeight: 600 }}>
-              SQL and safety checks
+              Safety checks
             </summary>
-            <pre className="code-block small">{r.sql}</pre>
             <ul className="small muted">
-              <li>Static check: single read-only SELECT over the analytics dataset only.</li>
+              <li>Read-only: the query can only look at the analytics data, never change it.</li>
               <li>
-                BigQuery dry run passed: {(r.bytes_estimated / 1024).toFixed(0)} KB estimated, {(r.bytes_billed / 1024).toFixed(0)} KB billed (cap 200 MB).
+                Cost checked before running: {(r.bytes_billed / 1024).toFixed(0)} KB processed (limit 200 MB).
               </li>
-              {r.repairs.length ? <li>Gemini repaired its first query after BigQuery rejected it: “{r.repairs[0].rejected.slice(0, 160)}”.</li> : null}
+              {r.repairs ? <li>The first attempt did not pass the checks and was rewritten automatically.</li> : null}
               <li>Answer: {r.answer_source === "GEMINI" ? "written by Gemini; every number was checked against the rows" : "plain summary (Gemini's text did not pass the number check)"}.</li>
             </ul>
           </details>

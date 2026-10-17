@@ -22,7 +22,7 @@ Most AI features in fraud tools are a summary box on top of a dashboard. FraudGr
 | Tune the rules | Suggested threshold changes | Re-scored by the rule engine before anyone applies them |
 | Contact the customer | Call or message script in their language | Accounts outside the case and sensitive details are stripped |
 
-**And it proves it on demand.** "Test the AI guardrails" on any case sends a deliberately tampered AI answer (an invented citation, an uncited accusation, a hold on an account outside the case, an action outside the catalogue, an injected instruction) through the same production checks and shows each one stopped, with a correctly cited claim kept as a control. No model is called, so a judge can run it at any time.
+**And it proves it on demand.** "Verify AI safety controls" on the Audit page sends a deliberately tampered AI answer (an invented citation, an uncited accusation, a hold on an account outside the case, an action outside the catalogue, an injected instruction) through the same production checks and shows each one stopped, with a correctly cited claim kept as a control. No model is called, so a judge can run it at any time, and every run is written to the audit trail with who ran it and the result, so compliance can show when the controls were last verified.
 
 ## How this differs from existing tools
 | | Graph analytics tools | LLM copilots | FraudGraph AI |
@@ -81,7 +81,7 @@ All figures are measured on the project's own synthetic dataset. See [evaluation
 | Evidence assembled automatically | 140 cited items across 6 cases |
 | Document check, live test | Matching receipt: SUPPORTS in about 10 s (amount, date, parties and bank reference matched). Unrelated invoice: DOES NOT SUPPORT, with each field compared. |
 | Similar cases, live test | For all five scenario cases, the top-ranked precedent was the one written for that pattern. The archive is synthetic and was written by the team, so this shows the technique working, not real-world accuracy. |
-| Automated tests | 110 backend tests, including citation, injection, fallback, action-validation, document-check, similarity and guardrail self-test cases |
+| Automated tests | 112 backend tests, including citation, injection, fallback, action-validation, document-check, similarity and guardrail self-test cases |
 
 The evaluation also contains an illustrative effort estimate of about 18 minutes of manual record-gathering per case. That rests on an assumed 2 minutes per record and has not been measured with analysts, so present it as an assumption.
 
@@ -97,7 +97,7 @@ React and Cytoscape.js → FastAPI → a pure-Python rule engine, NetworkX graph
 | 0:45 | "Money fans out to five new accounts and regroups within half an hour." | Trace a path on the graph; click an arrow to open the record |
 | 1:10 | "Every point of the score is explained, including what we don't know." | Signals table, uncertainty box, an account opened days earlier |
 | 1:30 | "Gemini explains it from this evidence only. Click any citation." | Investigate with Gemini; open a citation; point to alternatives and uncertainty |
-| 1:42 | "And if the model makes something up? Watch." | Run "Test the AI guardrails": invented evidence, an accusation with no source and a hold on an outside account are all stopped |
+| 1:42 | "And if the model makes something up? Watch." | On Audit, run "Verify AI safety controls": invented evidence, an accusation with no source and a hold on an outside account are all stopped |
 | 1:50 | "A genuine payment? Upload the receipt." | On the legitimate property case, upload `docs/samples/booking-receipt.png`; show the green field-by-field match |
 | 2:05 | "Then we act, proportionately, with a person in control." | Mitigation actions: approve "Hold for manual review"; show AI-draft and playbook sources. In the Simulator, send the suggested transfer from the held account: it is held and the money does not move. Back on the case, reject it. |
 | 2:25 | "The compliance report writes itself, with verified citations." | Draft report; download the case file |

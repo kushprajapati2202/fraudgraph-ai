@@ -37,7 +37,15 @@ def audit_log(
             "LEFT JOIN cases c ON c.case_id = e.case_id WHERE e.case_id IS NOT NULL "
             "GROUP BY e.case_id ORDER BY last_event_id DESC")]
         workspace_events = conn.execute("SELECT COUNT(*) FROM audit_events WHERE case_id IS NULL").fetchone()[0]
+        last = conn.execute(
+            "SELECT e.case_id, e.event_payload, e.created_at, c.title FROM audit_events e "
+            "LEFT JOIN cases c ON c.case_id = e.case_id WHERE e.event_type = 'AI_GUARDRAIL_TEST' "
+            "ORDER BY e.event_id DESC LIMIT 1").fetchone()
     for c in cases:
         c.pop("last_event_id")
+    last_guardrail_test = None
+    if last:
+        last_guardrail_test = {"case_id": last["case_id"], "title": last["title"], "created_at": last["created_at"],
+                               **json.loads(last["event_payload"])}
     return {"items": items, "total": total, "page": page, "page_size": page_size,
-            "cases": cases, "workspace_events": workspace_events}
+            "cases": cases, "workspace_events": workspace_events, "last_guardrail_test": last_guardrail_test}

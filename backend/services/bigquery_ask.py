@@ -167,8 +167,11 @@ def ask(question: str) -> dict:
             "Your previous query was rejected. Fix it and return the corrected plan.",
             {"question": question, "previous_sql": plan["sql"][:2000], "error": attempts[-1]["rejected"]})
     else:
+        logger.warning("BigQuery ask rejected after %d attempt(s): %s", len(attempts), attempts)
         raise SqlRejected(attempts[-1]["rejected"] if attempts else "No query produced.")
 
+    # The SQL is an implementation detail: it is logged for operators but never returned to the browser.
+    logger.info("BigQuery ask: %d repair(s), running: %s", len(attempts), sql)
     columns, rows, billed = _execute(sql)
     answer, answer_source = f"The query returned {len(rows)} row(s).", "SYSTEM"
     if rows:
@@ -178,8 +181,8 @@ def ask(question: str) -> dict:
             answer, answer_source = ai_common.trunc(parsed.answer, 400), "GEMINI"
     x, y = plan["x_column"], plan["y_column"]
     chart = plan["chart"] if plan["chart"] != "TABLE" and x in columns and y in columns else "TABLE"
-    result = {"question": question, "sql": sql, "interpretation": ai_common.trunc(plan["interpretation"], 240),
+    result = {"question": question, "interpretation": ai_common.trunc(plan["interpretation"], 240),
               "columns": columns, "rows": rows, "row_count": len(rows), "chart": chart, "x_column": x,
               "y_column": y, "answer": answer, "answer_source": answer_source,
-              "bytes_estimated": bytes_estimate, "bytes_billed": billed, "repairs": attempts}
+              "bytes_estimated": bytes_estimate, "bytes_billed": billed, "repairs": len(attempts)}
     return ai_common.from_gemini(result, {"removed_ids": [], "guard": "static+dry-run", "repairs": len(attempts)})

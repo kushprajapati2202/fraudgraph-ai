@@ -3,7 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { api } from "../api/client";
 import { AccountControlTags, Avatar, ControlTag, ErrorState, Loading, RiskBadge, ScoreRing, StatusChip, SyntheticTag } from "../components/common";
 import { Busy, SecondOpinion, SourceNote, useRun } from "../components/ai";
-import { CounterfactualCard, GuardrailCard, StrDraftCard } from "../components/CaseAssist";
+import { CounterfactualCard, StrDraftCard } from "../components/CaseAssist";
 import { DecisionPanel } from "../components/DecisionPanel";
 import DocumentPanel from "../components/Documents";
 import EvidenceList from "../components/EvidenceList";
@@ -341,7 +341,6 @@ export default function CaseDetailPage() {
             translation={d.ai_extras.TRANSLATION}
             onChanged={refresh}
           />
-          <GuardrailCard caseId={c.case_id} />
           <DocumentPanel detail={d} onChanged={refresh} />
           <ActionsPanel detail={d} onChanged={refresh} />
           <DecisionPanel caseId={c.case_id} status={c.status} decisions={d.decisions} onSaved={refresh} />

@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { api } from "../api/client";
+import { GuardrailCard } from "../components/CaseAssist";
 import { Empty, ErrorState, Loading } from "../components/common";
 import { ACTOR, describe } from "../components/DecisionPanel";
 import { caseHeadline, fmtTime, plural, useAsync, usePageTitle } from "../util";
@@ -16,6 +17,11 @@ export default function AuditPage() {
   const pageSize = 25;
   const resultsRef = useRef<HTMLElement>(null);
   const log = useAsync(() => api.audit({ case_id: caseId || undefined, page, page_size: pageSize }), [caseId, page]);
+  const cases = useAsync(() => api.cases({}), []);
+  const [checkCase, setCheckCase] = useState("");
+  // Default the safety check to the case being filtered on, else the highest-priority active case.
+  const checkCaseId = checkCase || (cases.data?.items.some((c) => c.case_id === caseId) ? caseId : cases.data?.items[0]?.case_id) || "";
+  const lastCheck = log.data?.last_guardrail_test;
   usePageTitle("Audit");
   const totalPages = log.data ? Math.max(1, Math.ceil(log.data.total / pageSize)) : 1;
   const pick = (value: string) => {
@@ -33,13 +39,51 @@ export default function AuditPage() {
       <div className="page-head">
         <div>
           <h1>Audit</h1>
-          <p className="muted">Every system, AI and analyst event recorded in this workspace, newest first.</p>
+          <p className="muted">Every system, AI and analyst event recorded in this workspace, newest first, and proof that the AI controls work.</p>
         </div>
         {caseId && caseId !== WORKSPACE ? (
           <Link to={`/cases/${encodeURIComponent(caseId)}`} className="btn btn-small">
             Back to {filtered?.title ? caseHeadline(filtered.title) : caseId}
           </Link>
         ) : null}
+      </div>
+
+      <div className="stack-sm">
+        <div className="muted small" role="status">
+          {lastCheck ? (
+            <>
+              AI safety controls last verified {fmtTime(lastCheck.created_at)} UTC by {lastCheck.actor_label} on{" "}
+              <Link to={`/cases/${encodeURIComponent(lastCheck.case_id)}`}>{lastCheck.title ? caseHeadline(lastCheck.title) : lastCheck.case_id}</Link>:{" "}
+              <strong style={{ color: lastCheck.all_passed ? "var(--low)" : "var(--high)" }}>
+                {lastCheck.stopped} of {lastCheck.attacks} tampered outputs stopped
+              </strong>
+              .
+            </>
+          ) : (
+            "AI safety controls have not been verified in this workspace yet."
+          )}
+        </div>
+        {cases.error ? <ErrorState message={cases.error} onRetry={cases.reload} /> : null}
+        {cases.data && cases.data.items.length === 0 ? (
+          <Empty>No active cases to run the AI safety check against. Run an analysis first.</Empty>
+        ) : (
+          <GuardrailCard
+            caseId={checkCaseId}
+            onRan={log.reload}
+            picker={
+              <label className="inline">
+                <span className="visually-hidden">Case to check</span>
+                <select value={checkCaseId} onChange={(e) => setCheckCase(e.target.value)} aria-label="Case to check" style={{ maxWidth: 360 }}>
+                  {cases.data?.items.map((c) => (
+                    <option key={c.case_id} value={c.case_id}>
+                      {caseHeadline(c.title)} &middot; {c.case_id}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            }
+          />
+        )}
       </div>
 
       <section className="card card-flush" ref={resultsRef} aria-labelledby="audit-log-heading">

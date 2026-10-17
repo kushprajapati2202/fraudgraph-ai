@@ -19,6 +19,7 @@ import { useInspector } from "./Inspector";
 import { Citations } from "./InvestigatorPanel";
 import { ExpandButton, Modal } from "./Modal";
 import { downloadPdf } from "../pdf";
+import { usePrefs } from "../prefs";
 
 export const LANGUAGES: { code: LanguageCode; label: string; speech: string }[] = [
   { code: "en", label: "English", speech: "en-IN" },
@@ -400,20 +401,31 @@ const GUARD_OUTCOME: Record<GuardrailCheck["outcome"], { label: string; color: s
   FAILED: { label: "✗ Not stopped", color: "var(--high)" },
 };
 
-/** Guardrail self-test: a tampered model response is run through the same checks as every real Gemini answer. */
-export function GuardrailCard({ caseId }: { caseId: string }) {
+/** AI safety check: a tampered model response is run through the same checks as every real Gemini answer.
+ *  Each run is recorded in the audit trail with the analyst's name, as evidence for compliance and model-risk review. */
+export function GuardrailCard({ caseId, picker, onRan }: { caseId: string; picker?: ReactNode; onRan?: () => void }) {
   const [result, setResult] = useState<GuardrailTest | null>(null);
   const { busy, error, run } = useRun();
+  const { analystName } = usePrefs();
+  useEffect(() => setResult(null), [caseId]);
+  const verify = async () => {
+    const r = await run(() => api.guardrailTest(caseId, { actor_label: analystName || undefined }));
+    if (r) {
+      setResult(r);
+      onRan?.();
+    }
+  };
   return (
     <section className="card ai-card" aria-labelledby="guard-heading" id="sec-guardrails">
-      <AiHead id="guard-heading" title="Test the AI guardrails" chip="No model call · production checks" />
+      <AiHead id="guard-heading" title="Verify AI safety controls" chip="No model call · production checks" />
       <p className="muted small">
-        Sends a deliberately tampered AI answer for this case (invented evidence, uncited claims, an action outside the case) through
-        exactly the code that checks every real Gemini response, and shows what gets stopped before an analyst sees it.
+        Proves the assistant cannot cite evidence that does not exist, make claims without a source, or act outside a case. A deliberately
+        tampered AI answer is sent through exactly the checks every real Gemini response passes, and each run is recorded in the audit trail.
       </p>
-      <div className="row-center" style={{ marginTop: 8 }}>
-        <button className="btn btn-primary" onClick={async () => { const r = await run(() => api.guardrailTest(caseId)); if (r) setResult(r); }} disabled={busy}>
-          {busy ? "Testing..." : result ? "Run again" : "Run guardrail test"}
+      <div className="row-center" style={{ marginTop: 8, flexWrap: "wrap" }}>
+        {picker}
+        <button className="btn btn-primary" onClick={verify} disabled={busy || !caseId}>
+          {busy ? "Verifying..." : result ? "Run again" : "Run safety check"}
         </button>
       </div>
       {error ? <div className="callout callout-error" role="alert">{error}</div> : null}

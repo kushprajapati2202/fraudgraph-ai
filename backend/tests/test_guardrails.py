@@ -21,3 +21,17 @@ def test_guardrail_test_blocks_every_attack_and_keeps_the_control(client):
 
 def test_guardrail_test_unknown_case_is_404(client):
     assert client.post("/api/cases/CASE-NOPE/guardrail-test").status_code == 404
+
+
+def test_guardrail_test_is_audited_and_reported_as_last_run(client):
+    case_id = _case_id(client)
+    r = client.post(f"/api/cases/{case_id}/guardrail-test", json={"actor_label": "Priya Nair"})
+    assert r.status_code == 200
+    log = client.get("/api/audit", params={"case_id": case_id}).json()
+    event = next(e for e in log["items"] if e["event_type"] == "AI_GUARDRAIL_TEST")
+    assert event["actor_type"] == "HUMAN"
+    assert event["event_payload"]["actor_label"] == "Priya Nair"
+    assert event["event_payload"]["stopped"] == event["event_payload"]["attacks"] == 6
+    assert event["event_payload"]["failed_checks"] == []
+    last = log["last_guardrail_test"]
+    assert last["case_id"] == case_id and last["all_passed"] is True and last["actor_label"] == "Priya Nair"

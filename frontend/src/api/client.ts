@@ -197,6 +197,20 @@ export interface AuditLog extends Paged<AuditLogEntry> {
   /** Filter options: cases with at least one audit event, most recently audited first. */
   cases: { case_id: string; title: string | null; events: number }[];
   workspace_events: number;
+  /** The most recent AI safety check in this workspace, or null if none has been run. */
+  last_guardrail_test: GuardrailRun | null;
+}
+
+export interface GuardrailRun {
+  case_id: string;
+  title: string | null;
+  created_at: string;
+  actor_label: string;
+  attacks: number;
+  stopped: number;
+  all_passed: boolean;
+  evidence_sent: number;
+  failed_checks: string[];
 }
 
 export interface DecisionRecord {
@@ -364,7 +378,6 @@ export interface StreamEvent {
 
 export interface BigQueryAskResult {
   question: string;
-  sql: string;
   interpretation: string;
   columns: string[];
   rows: Record<string, any>[];
@@ -376,7 +389,8 @@ export interface BigQueryAskResult {
   answer_source: "GEMINI" | "SYSTEM";
   bytes_estimated: number;
   bytes_billed: number;
-  repairs: { sql: string; rejected: string }[];
+  /** How many times the generated query was rejected and rewritten before it passed the checks. */
+  repairs: number;
 }
 
 export interface MlFeature {
@@ -1063,7 +1077,8 @@ export const api = {
   makeRuleTuning: () => request<Insight<RuleTuningResult>>("POST", "/api/ai/rule-tuning"),
   // Case assistants
   narrate: (id: string) => request<Insight<NarrationResult>>("POST", `/api/cases/${encodeURIComponent(id)}/narrate`),
-  guardrailTest: (id: string) => request<GuardrailTest>("POST", `/api/cases/${encodeURIComponent(id)}/guardrail-test`),
+  guardrailTest: (id: string, body: { actor_label?: string }) =>
+    request<GuardrailTest>("POST", `/api/cases/${encodeURIComponent(id)}/guardrail-test`, body),
   counterfactual: (id: string) => request<Insight<CounterfactualResult>>("POST", `/api/cases/${encodeURIComponent(id)}/counterfactual`),
   contactScript: (id: string, body: { account_id: string; channel: string; language: LanguageCode }) =>
     request<Insight<ContactScriptResult>>("POST", `/api/cases/${encodeURIComponent(id)}/contact-script`, body),
