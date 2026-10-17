@@ -1,10 +1,11 @@
-import { useState, type FormEvent } from "react";
+import { useCallback, useState, type FormEvent, type ReactNode } from "react";
 import { api, type AIRecord, type ChatResult, type Evidence, type Insight, type InvestigationResult, type RiskBand, type TranslationResult } from "../api/client";
 import { useAiStatus } from "../health";
 import { errorMessage, fmtTime } from "../util";
 import { RiskBadge } from "./common";
 import { SecondOpinionNote, TranslatePanel } from "./CaseAssist";
 import { useInspector } from "./Inspector";
+import { ExpandButton, Modal, Toast } from "./Modal";
 
 interface Props {
   caseId: string;
@@ -38,12 +39,119 @@ export function Citations({ ids, byId }: { ids: string[]; byId: Map<string, Evid
   );
 }
 
-export default function InvestigatorPanel({ caseId, evidence, latest, chats, geminiConfigured, ruleBand, translation, onChanged }: Props) {
+/** The investigation result itself; shown in the side panel and in the full-view pop-up. */
+function InvestigationDetails({ result, validation, byId, extra }: {
+  result: InvestigationResult;
+  validation: AIRecord<InvestigationResult>["response"]["validation"];
+  byId: Map<string, Evidence>;
+  /** Extra blocks shown under the priority line (second opinion, translation). */
+  extra?: ReactNode;
+}) {
+  return (
+    <>
+      <p className="ai-summary">{result.case_summary}</p>
+      <div className="row small">
+        <span>AI review priority recommendation:</span> <RiskBadge band={result.review_priority} />
+        <span className="muted">(not a decision)</span>
+      </div>
+      {extra}
+
+      {validation && (validation.removed_ids.length > 0 || validation.unsupported_claims.length > 0) ? (
+        <div className="callout callout-warn" role="status">
+          <strong>Citation validation:</strong>{" "}
+          {validation.removed_ids.length > 0 ? (
+            <>
+              removed {validation.removed_ids.length} reference(s) to evidence that does not exist in this case (
+              <span className="mono">{validation.removed_ids.join(", ")}</span>).{" "}
+            </>
+          ) : null}
+          {validation.unsupported_claims.length > 0 ? (
+            <>
+              {validation.unsupported_claims.length} claim(s) had no valid evidence and are listed separately below, not as facts.
+            </>
+          ) : null}
+        </div>
+      ) : (
+        <p className="small ok-text">
+          {"✓"} All {validation?.valid_citations ?? 0} citations resolve to evidence in this case.
+        </p>
+      )}
+
+      <div>
+        <h3 className="section-title">Observed facts</h3>
+        <ul className="ai-list">
+          {result.observed_facts.map((f, i) => (
+            <li key={i}>
+              {f.statement} <Citations ids={f.evidence_ids} byId={byId} />
+            </li>
+          ))}
+        </ul>
+      </div>
+      <div>
+        <h3 className="section-title">Risk indicators</h3>
+        <ul className="ai-list">
+          {result.risk_indicators.map((r, i) => (
+            <li key={i}>
+              <strong>{r.indicator}.</strong> {r.reasoning} <Citations ids={r.evidence_ids} byId={byId} />
+            </li>
+          ))}
+        </ul>
+      </div>
+      <div className="two-col">
+        <div>
+          <h3 className="section-title">Alternative explanations</h3>
+          <ul className="ai-list">
+            {result.alternative_explanations.map((t, i) => (
+              <li key={i}>{t}</li>
+            ))}
+          </ul>
+        </div>
+        <div>
+          <h3 className="section-title">Uncertainties</h3>
+          <ul className="ai-list">
+            {result.uncertainties.map((t, i) => (
+              <li key={i}>{t}</li>
+            ))}
+          </ul>
+        </div>
+      </div>
+      <div>
+        <h3 className="section-title">Recommended review steps</h3>
+        <ol className="ai-list">
+          {result.recommended_next_steps.map((t, i) => (
+            <li key={i}>{t}</li>
+          ))}
+        </ol>
+      </div>
+      {validation && validation.unsupported_claims.length > 0 ? (
+        <div>
+          <h3 className="section-title">Unsupported claims (no valid evidence; not shown as fact)</h3>
+          <ul className="ai-list unsupported">
+            {validation.unsupported_claims.map((c, i) => (
+              <li key={i}>
+                <span className="chip chip-warn">unsupported</span> {c.text}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+    </>
+  );
+}
+
+export default function InvestigatorPanel({ caseId, evidence, latest: saved, chats, geminiConfigured, ruleBand, translation, onChanged }: Props) {
   const [question, setQuestion] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState("");
   const [chatBusy, setChatBusy] = useState(false);
+  const [fullView, setFullView] = useState(false);
+  // The record just returned, so "View results" works before the case page has finished reloading.
+  const [fresh, setFresh] = useState<{ caseId: string; record: AIRecord<InvestigationResult> } | null>(null);
+  const latest = fresh && fresh.caseId === caseId && fresh.record.investigation_id > (saved?.investigation_id ?? 0) ? fresh.record : saved;
+  const [notice, setNotice] = useState<{ tone: "ok" | "warn"; title: string; text: string } | null>(null);
+  const closeFullView = useCallback(() => setFullView(false), []);
+  const closeNotice = useCallback(() => setNotice(null), []);
   const byId = new Map(evidence.map((e) => [e.evidence_id, e]));
   const ai = useAiStatus();
   const aiNote =
@@ -59,8 +167,13 @@ export default function InvestigatorPanel({ caseId, evidence, latest, chats, gem
     setBusy(true);
     setError(null);
     try {
-      await api.investigate(caseId, question.trim() || undefined);
+      const record = await api.investigate(caseId, question.trim() || undefined);
+      setFresh({ caseId, record });
       onChanged();
+      setNotice(record.response.status === "OK"
+        ? { tone: "ok", title: "Your investigation is ready", text: "Gemini has finished reviewing this case." }
+        : { tone: "warn", title: "Gemini couldn't finish the investigation",
+            text: record.response.message ?? "The rule findings and evidence on this page are still available." });
       ai.recheck(); // refresh the AI indicator (server-side cached)
     } catch (e) {
       setError(errorMessage(e));
@@ -98,7 +211,10 @@ export default function InvestigatorPanel({ caseId, evidence, latest, chats, gem
           </span>{" "}
           Gemini investigation
         </h2>
-        <span className="chip chip-ai">AI-generated &middot; advisory only</span>
+        <div className="card-tools">
+          <span className="chip chip-ai">AI-generated &middot; advisory only</span>
+          {result ? <ExpandButton onClick={() => setFullView(true)} label="Open investigation in full view" /> : null}
+        </div>
       </div>
       <p className="muted small">
         Gemini sees only this case's evidence package. Every citation is checked against the allowed evidence IDs before it is shown.
@@ -149,93 +265,15 @@ export default function InvestigatorPanel({ caseId, evidence, latest, chats, gem
             {resp?.model} &middot; {resp?.prompt_version} &middot; {fmtTime(latest?.created_at)}
             {latest?.question ? <> &middot; focus: &ldquo;{latest.question}&rdquo;</> : null}
           </div>
-          <p className="ai-summary">{result.case_summary}</p>
-          <div className="row small">
-            <span>AI review priority recommendation:</span> <RiskBadge band={result.review_priority} />
-            <span className="muted">(not a decision)</span>
-          </div>
-          <SecondOpinionNote band={ruleBand} result={result} />
-          <TranslatePanel caseId={caseId} record={translation} investigation={result} />
-
-          {validation && (validation.removed_ids.length > 0 || validation.unsupported_claims.length > 0) ? (
-            <div className="callout callout-warn" role="status">
-              <strong>Citation validation:</strong>{" "}
-              {validation.removed_ids.length > 0 ? (
-                <>
-                  removed {validation.removed_ids.length} reference(s) to evidence that does not exist in this case (
-                  <span className="mono">{validation.removed_ids.join(", ")}</span>).{" "}
-                </>
-              ) : null}
-              {validation.unsupported_claims.length > 0 ? (
-                <>
-                  {validation.unsupported_claims.length} claim(s) had no valid evidence and are listed separately below, not as facts.
-                </>
-              ) : null}
-            </div>
-          ) : (
-            <p className="small ok-text">
-              {"✓"} All {validation?.valid_citations ?? 0} citations resolve to evidence in this case.
-            </p>
-          )}
-
-          <div>
-            <h3 className="section-title">Observed facts</h3>
-            <ul className="ai-list">
-              {result.observed_facts.map((f, i) => (
-                <li key={i}>
-                  {f.statement} <Citations ids={f.evidence_ids} byId={byId} />
-                </li>
-              ))}
-            </ul>
-          </div>
-          <div>
-            <h3 className="section-title">Risk indicators</h3>
-            <ul className="ai-list">
-              {result.risk_indicators.map((r, i) => (
-                <li key={i}>
-                  <strong>{r.indicator}.</strong> {r.reasoning} <Citations ids={r.evidence_ids} byId={byId} />
-                </li>
-              ))}
-            </ul>
-          </div>
-          <div className="two-col">
-            <div>
-              <h3 className="section-title">Alternative explanations</h3>
-              <ul className="ai-list">
-                {result.alternative_explanations.map((t, i) => (
-                  <li key={i}>{t}</li>
-                ))}
-              </ul>
-            </div>
-            <div>
-              <h3 className="section-title">Uncertainties</h3>
-              <ul className="ai-list">
-                {result.uncertainties.map((t, i) => (
-                  <li key={i}>{t}</li>
-                ))}
-              </ul>
-            </div>
-          </div>
-          <div>
-            <h3 className="section-title">Recommended review steps (for a human)</h3>
-            <ol className="ai-list">
-              {result.recommended_next_steps.map((t, i) => (
-                <li key={i}>{t}</li>
-              ))}
-            </ol>
-          </div>
-          {validation && validation.unsupported_claims.length > 0 ? (
-            <div>
-              <h3 className="section-title">Unsupported claims (no valid evidence; not shown as fact)</h3>
-              <ul className="ai-list unsupported">
-                {validation.unsupported_claims.map((c, i) => (
-                  <li key={i}>
-                    <span className="chip chip-warn">unsupported</span> {c.text}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
+          <InvestigationDetails
+            result={result}
+            validation={validation}
+            byId={byId}
+            extra={<>
+              <SecondOpinionNote band={ruleBand} result={result} />
+              <TranslatePanel caseId={caseId} record={translation} investigation={result} />
+            </>}
+          />
         </div>
       ) : null}
 
@@ -278,6 +316,34 @@ export default function InvestigatorPanel({ caseId, evidence, latest, chats, gem
           </button>
         </form>
       </div>
+
+      {fullView && result ? (
+        <Modal
+          title={<><span className="ai-mark" aria-hidden="true">{"✦"}</span> Gemini investigation</>}
+          subtitle={<>{caseId} &middot; {resp?.model} &middot; {fmtTime(latest?.created_at)} UTC{latest?.question ? <> &middot; focus: &ldquo;{latest.question}&rdquo;</> : null}</>}
+          onClose={closeFullView}
+          footer={<span className="chip chip-ai">AI-generated &middot; advisory only</span>}
+        >
+          <div className="stack ai-result">
+            <InvestigationDetails result={result} validation={validation} byId={byId} extra={<SecondOpinionNote band={ruleBand} result={result} />} />
+          </div>
+        </Modal>
+      ) : null}
+
+      {notice ? (
+        <Toast
+          tone={notice.tone}
+          title={notice.title}
+          onClose={closeNotice}
+          action={notice.tone === "ok" ? (
+            <button className="btn btn-small btn-primary" onClick={() => { setNotice(null); setFullView(true); }}>
+              View results
+            </button>
+          ) : null}
+        >
+          {notice.text}
+        </Toast>
+      ) : null}
     </section>
   );
 }

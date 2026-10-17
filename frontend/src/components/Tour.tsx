@@ -43,6 +43,12 @@ const STEPS: Step[] = [
   },
   {
     route: "/",
+    target: '[data-tour="dash-recs"]',
+    title: "Recommended for you",
+    body: "Up to five next steps picked for you: overdue tasks, transfers waiting on your holds, cases you asked for more evidence on, and new cases that look like ones you escalated. Set your name in Settings to make it personal.",
+  },
+  {
+    route: "/",
     target: '[data-tour="dash-actions"]',
     title: "Run analysis",
     body: "Scores every transfer with the transparent rules and rebuilds the cases. The linking window controls how close in time transfers must be to join the same case.",

@@ -102,6 +102,14 @@ export const IconRefresh = (p: P) => (
     <path d="M4 13a8 8 0 0 0 14.900 3M20 20v-4h-4" />
   </Svg>
 );
+export const IconExpand = (p: P) => (
+  <Svg {...p}>
+    <path d="M15 3h6v6" />
+    <path d="M9 21H3v-6" />
+    <path d="M21 3l-7 7" />
+    <path d="M3 21l7-7" />
+  </Svg>
+);
 export const IconClock = (p: P) => (
   <Svg {...p}>
     <circle cx="12" cy="12" r="9" />
