@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { api, type AskResult, type DayExplanationResult, type Insight } from "../api/client";
 import { useAiStatus } from "../health";
@@ -28,6 +28,7 @@ export function BriefingCard({ refreshKey }: { refreshKey: number }) {
   const { busy, error, run } = useRun();
   const ai = useAiStatus();
   const current = data.data;
+  const autoRefreshed = useRef(false);
 
   async function ask() {
     if (await run(() => api.makeBriefing())) {
@@ -36,6 +37,14 @@ export function BriefingCard({ refreshKey }: { refreshKey: number }) {
     }
   }
 
+  // A briefing written before the latest changes would contradict the panels around it, so rewrite it once.
+  useEffect(() => {
+    if (current?.stale && current.response.source === "GEMINI" && ai.status?.state === "CONNECTED" && !busy && !autoRefreshed.current) {
+      autoRefreshed.current = true;
+      void ask();
+    }
+  });
+
   return (
     <section className="card ai-card briefing" aria-labelledby="briefing-heading" data-tour="dash-briefing">
       <AiHead id="briefing-heading" title="Shift briefing" chip="AI · advisory" />
@@ -43,6 +52,11 @@ export function BriefingCard({ refreshKey }: { refreshKey: number }) {
       {data.error && !current ? <ErrorState message={data.error} onRetry={data.reload} /> : null}
       {current?.response.result ? (
         <div className="stack-sm" aria-live="polite">
+          {current.stale ? (
+            <div className="callout callout-warn small" role="status">
+              {busy ? "The queue changed after this briefing was written. Updating it now..." : "The queue changed after this briefing was written. Refresh it for current numbers."}
+            </div>
+          ) : null}
           <p className="briefing-headline">{current.response.result.headline}</p>
           <p className="ai-summary">{current.response.result.summary}</p>
           {current.response.result.highlights.length ? (

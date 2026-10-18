@@ -523,6 +523,8 @@ export interface AIRecord<T> {
   kind: "INVESTIGATION" | "CHAT" | "REPORT";
   question: string | null;
   response: AIResponse<T>;
+  /** Investigation only: the case's evidence changed after Gemini read it. */
+  stale?: boolean;
 }
 
 /** Response of the AI features beyond the investigation. source RULES = rule-based (Gemini not asked or unavailable). */

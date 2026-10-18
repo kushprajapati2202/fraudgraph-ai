@@ -261,6 +261,14 @@ export default function InvestigatorPanel({ caseId, evidence, latest: saved, cha
 
       {result ? (
         <div className="stack ai-result" aria-live="polite">
+          {latest?.stale && !busy ? (
+            <div className="callout callout-warn row-center" role="status" style={{ justifyContent: "space-between", gap: 8 }}>
+              <span><strong>The case changed after this was written.</strong> Counts and amounts below may be out of date.</span>
+              <button className="btn btn-small" onClick={run} disabled={busy}>
+                Update
+              </button>
+            </div>
+          ) : null}
           <div className="ai-meta muted small">
             {resp?.model} &middot; {resp?.prompt_version} &middot; {fmtTime(latest?.created_at)}
             {latest?.question ? <> &middot; focus: &ldquo;{latest.question}&rdquo;</> : null}

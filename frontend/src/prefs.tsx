@@ -44,8 +44,9 @@ const PrefsContext = createContext<Prefs>({
 export const usePrefs = () => useContext(PrefsContext);
 
 export function initials(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (!parts.length) return "A";
+  // Letters only: "New beneficiary 901 (simulated)" gives "NS", not "N(".
+  const parts = name.trim().split(/\s+/).map((p) => p.replace(/[^\p{L}]/gu, "")).filter(Boolean);
+  if (!parts.length) return name.trim()[0] ?? "A";
   return (parts[0][0] + (parts.length > 1 ? parts[parts.length - 1][0] : "")).toUpperCase();
 }
 

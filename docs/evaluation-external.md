@@ -57,3 +57,15 @@ Pattern names are the ones the dataset authors documented in `HI-Small_Patterns.
 - Timestamps have minute resolution and there are no device identifiers, so the shared-device rule never fires and transfers forwarded within the same minute are not counted as onward movement.
 - Amounts are in 15 currencies and are not converted. The fixed no-baseline threshold of 100,000 was chosen for rupees, so it means something different in each currency here.
 - The data is synthetic. It is independent of this project, but it is still not real bank data.
+
+## What this tells us to build next
+
+The gaps point at specific rule changes, not at the AI layer. None of them were made, so this test stays independent.
+
+| Gap seen here | Change to the engine |
+|---|---|
+| Bipartite, scatter-gather and cycle patterns score 0 to 4% recall | Graph-shape rules over the case graph: cycles back to the origin, many-to-many layers, gather-then-scatter |
+| Patterns spread over hours or days | Multi-day linking and onward-movement windows alongside the current 30 to 60 minutes |
+| Relationship novelty fires on 36.5% of legitimate transfers | Keep it context-only, and require a longer history before calling a pair new |
+| Amounts in 15 currencies | Convert to one currency before the unusual-amount rule |
+| Synthetic labels only | Retrain the BigQuery ML model on real labelled outcomes, where its learned view can add recall the rules miss |

@@ -20,7 +20,7 @@ Most AI features in fraud tools are a summary box on top of a dashboard. FraudGr
 | Question the data | GoogleSQL from a plain-English question | Static guard, BigQuery dry run, byte cap; numbers in the answer must appear in the rows |
 | Apply policy | Steps from the policy library (Vertex AI Search) | Each step must cite a retrieved passage |
 | Tune the rules | Suggested threshold changes | Re-scored by the rule engine before anyone applies them |
-| Contact the customer | Call or message script in their language | Accounts outside the case and sensitive details are stripped |
+| Brief the analyst in their language | Investigation summary translated (for example Hindi) and read aloud | Citations re-checked against the same allow-list after translation |
 
 **And it proves it on demand.** "Verify AI safety controls" on the Audit page sends a deliberately tampered AI answer (an invented citation, an uncited accusation, a hold on an account outside the case, an action outside the catalogue, an injected instruction) through the same production checks and shows each one stopped, with a correctly cited claim kept as a control. No model is called, so a judge can run it at any time, and every run is written to the audit trail with who ran it and the result, so compliance can show when the controls were last verified.
 
@@ -130,7 +130,8 @@ Inside the sandbox, yes: once an analyst approves a hold, every new transfer to 
 Real authentication and roles (Identity-Aware Proxy), Cloud SQL in place of SQLite, integration with the bank's case and payment systems, tuning rules on real data, and a model-risk review.
 
 ## Limitations to state openly
-- Rules and scenarios were designed by the same team, so the detection figures overstate real-world performance. We measured by how much: on IBM's public anti-money-laundering dataset, with the rules unchanged, recall falls to 12.1% and precision to 0.10% (see `docs/evaluation-external.md`).
+- Rules and scenarios were designed by the same team, so the detection figures overstate real-world performance. We measured by how much: on IBM's public anti-money-laundering dataset, with the rules unchanged, recall falls to 12.1% and precision to 0.10% (see `docs/evaluation-external.md`). The cause is specific: our rules look at 30 to 60 minute windows, while IBM's laundering patterns (bipartite, scatter-gather, cycles) unfold over hours or days, so those patterns score 0 to 4% recall. The fix is equally specific and does not touch the AI layer: multi-day windows and graph-shape rules (cycles, scatter-gather) added to the engine, with the BigQuery ML model retrained on real labels. We deliberately did not retune the rules on IBM data, so the test stays independent.
+- The BigQuery ML model reports near-perfect scores on the synthetic data because the scenarios are defined by the same behaviour it learns. The app labels these scores as optimistic and uses the model only as a second opinion.
 - The score is a priority index, not a calibrated probability.
 - Citation checks prove that cited evidence exists. They don't prove the reasoning is right, which is why a human reviews every case.
 - Mitigation actions are enforced inside the sandbox only, on transfers submitted after approval. Nothing is sent to an external system.
