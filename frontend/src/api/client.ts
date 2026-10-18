@@ -638,6 +638,48 @@ export interface TuningSuggestion {
   };
 }
 
+export interface RedTeamAttack {
+  name: string;
+  idea: string;
+  feeders: number;
+  layers: number;
+  split: number;
+  amount_each: number;
+  feeder_gap_minutes: number;
+  hop_gap_minutes: number;
+  onward_share: number;
+  transfers: number;
+  accounts: number;
+  amount_text: string;
+  duration_minutes: number;
+  max_score: number;
+  band: RiskBand;
+  caught: boolean;
+  flagged: number;
+  signals: { code: string; label: string }[];
+  fix: {
+    parameter: string;
+    label: string;
+    current_value: number;
+    proposed_value: number;
+    unit: string;
+    score_after: number;
+    band_after: RiskBand;
+    new_alerts: number;
+    new_alerts_on_suspicious: number;
+  } | null;
+}
+
+export interface RedTeamResult {
+  summary: string;
+  attacks: RedTeamAttack[];
+  evaded: number;
+  tested: number;
+  history_transfers: number;
+  case_threshold_score: number;
+  note: string;
+}
+
 export interface RuleTuningResult {
   summary: string;
   suggestions: TuningSuggestion[];
@@ -1077,6 +1119,8 @@ export const api = {
   askPortfolio: (question: string) => request<Insight<AskResult>>("POST", "/api/ai/ask", { question }),
   ruleTuning: () => request<Insight<RuleTuningResult>>("GET", "/api/ai/rule-tuning"),
   makeRuleTuning: () => request<Insight<RuleTuningResult>>("POST", "/api/ai/rule-tuning"),
+  redTeam: () => request<Insight<RedTeamResult>>("GET", "/api/ai/red-team"),
+  makeRedTeam: () => request<Insight<RedTeamResult>>("POST", "/api/ai/red-team"),
   // Case assistants
   narrate: (id: string) => request<Insight<NarrationResult>>("POST", `/api/cases/${encodeURIComponent(id)}/narrate`),
   guardrailTest: (id: string, body: { actor_label?: string }) =>

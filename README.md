@@ -73,6 +73,7 @@ Screenshots are in [docs/screenshots/](docs/screenshots/). Regenerate them with 
 | **Transactions** | Every transfer with holder names, bank-style references and filters |
 | **Network** | The flagged network. Click an account to focus on it. |
 | **Simulator** | Score a hypothetical transfer live and see what changed |
+| **Red team** | Gemini designs money-mule patterns meant to stay under the rules (bounded parameters only). The real engine scores them next to the history, and for each one that evades it simulates the smallest rule change that catches it and the extra alerts that change would add. Nothing is stored or applied. |
 | **Settings** | Analyst profile, theme, AI connection, data environment (restore baseline), detection rules, labeled test scenarios |
 
 Global search (`Ctrl+K`) finds cases, account holders and transfer references. Light and dark themes are both supported. The workspace is labeled **Sandbox, synthetic data** in the sidebar: the dataset uses invented names, account numbers and references, and no real customer data.
@@ -137,6 +138,7 @@ All routes use the `/api` prefix and return JSON. Errors use `{"error": {"code",
 |---|---|
 | `GET /health` | Status, versions, and whether Gemini is configured (never the key) |
 | `GET /ai/status` | Live Gemini check: key accepted, which model is answering, and why not if it isn't. Cached for about 2 minutes; `?refresh=true` forces a new check. |
+| `GET /ai/red-team`, `POST /ai/red-team` | Latest red-team run (rule playbook when none) / ask Gemini for new patterns; scored and fix-simulated by the engine, never applied |
 | `GET /rules` | Rule catalogue, weights and bands |
 | `GET /dashboard` | Counts, bands, recent cases, last analysis |
 | `GET /recommendations` | `?analyst=<name>` returns up to five rule-based next steps for that analyst, most urgent first. Without a name (or with the placeholder `Analyst`) the list is team-wide. |

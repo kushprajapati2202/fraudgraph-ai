@@ -180,7 +180,9 @@ def assess(tx: Tx, ctx: RiskContext, window_minutes: int = DEFAULT_WINDOW_MINUTE
     signals: list[dict] = []
     uncertainties: list[str] = []
     window = timedelta(minutes=window_minutes)
-    onward = timedelta(minutes=ONWARD_WINDOW_MINUTES)
+    # Simulation-only override (red team); never in TUNABLE, so rule tuning and live scoring keep 30 minutes.
+    onward_minutes = p.get("ONWARD_WINDOW_MINUTES", ONWARD_WINDOW_MINUTES)
+    onward = timedelta(minutes=onward_minutes)
 
     # UNUSUAL_AMOUNT
     base = ctx.baseline(tx.src, tx.ts)
@@ -230,16 +232,16 @@ def assess(tx: Tx, ctx: RiskContext, window_minutes: int = DEFAULT_WINDOW_MINUTE
             parts, supporting = [], [tx.id]
             if value_a > 0:
                 parts.append(f"{tx.dst} sent onward {fmt_amount(sum(t.amount for t in after))} "
-                             f"({ratio_a:.0%} of this amount) within {ONWARD_WINDOW_MINUTES} minutes")
+                             f"({ratio_a:.0%} of this amount) within {onward_minutes} minutes")
                 supporting += [t.id for t in after]
             if value_b > 0:
                 parts.append(f"{tx.src} had received {fmt_amount(sum(t.amount for t in before))} "
-                             f"({ratio_b:.0%} of this amount) in the {ONWARD_WINDOW_MINUTES} minutes before")
+                             f"({ratio_b:.0%} of this amount) in the {onward_minutes} minutes before")
                 supporting += [t.id for t in before]
             signals.append(_signal(
                 "RAPID_ONWARD", max(value_a, value_b), "; ".join(parts) + ".",
                 supporting,
-                {"onward_window_minutes": ONWARD_WINDOW_MINUTES, "ratio_after": round(ratio_a, 3),
+                {"onward_window_minutes": onward_minutes, "ratio_after": round(ratio_a, 3),
                  "ratio_before": round(ratio_b, 3), "full_ratio": ONWARD_FULL_RATIO,
                  "partial_ratio": p["ONWARD_PARTIAL_RATIO"]},
             ))
