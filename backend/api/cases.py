@@ -189,6 +189,10 @@ def get_case(case_id: str) -> dict:
             agg["transactions"] += 1
             agg["max_contribution"] = max(agg["max_contribution"], s["contribution"])
     uncertainties = sorted({u for t in txs for u in t["uncertainties"]})
+    if investigation:
+        # Stale when the case's evidence changed after Gemini read it (e.g. a new transfer joined the case).
+        sent = investigation[0]["response"].get("evidence_ids_sent")
+        investigation[0]["stale"] = sent is not None and set(sent) != {e["evidence_id"] for e in evidence}
     return {
         "case": case,
         "accounts": account_info,

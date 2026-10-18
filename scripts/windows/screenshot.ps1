@@ -28,6 +28,7 @@ $pages = [ordered]@{
     "transactions" = @("/transactions", 1300)
     "network"      = @("/network", 1000)
     "simulator"    = @("/simulator", 900)
+    "red-team"     = @("/red-team", 1300)
     "settings"     = @("/settings", 1700)
 }
 foreach ($name in $pages.Keys) {

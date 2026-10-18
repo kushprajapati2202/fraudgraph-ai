@@ -969,3 +969,17 @@ body.drawer-open, body.modal-open { overflow: hidden; }
 .table-wrap .table { margin: 0; }
 .service-list { list-style: none; margin: 0; padding: 0; }
 .service-list li:last-child { border-bottom: 0 !important; }
+
+/* Red team */
+.rt-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; }
+.rt-card { display: flex; flex-direction: column; gap: 10px; border-top: 3px solid var(--border); }
+.rt-card.rt-evaded { border-top-color: var(--high); }
+.rt-card.rt-caught { border-top-color: var(--low); }
+.rt-head { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; }
+.rt-params { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 14px; margin: 0; }
+.rt-params dt { color: var(--muted); font-size: 0.75rem; }
+.rt-params dd { margin: 0 0 4px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.rt-fix { padding: 10px 12px; border-radius: var(--radius-sm); background: var(--surface-2); border: 1px solid var(--border); }
+.rt-verdict { font-weight: 700; font-size: 0.8rem; letter-spacing: 0.02em; text-transform: uppercase; }
+.rt-verdict.bad { color: var(--high); }
+.rt-verdict.good { color: var(--low); }

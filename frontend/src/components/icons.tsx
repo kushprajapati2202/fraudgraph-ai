@@ -130,3 +130,10 @@ export const IconFlow = (p: P) => (
     <path d="M3 12h4l3-7 4 14 3-7h4" />
   </Svg>
 );
+export const IconTarget = (p: P) => (
+  <Svg {...p}>
+    <circle cx="12" cy="12" r="8" />
+    <circle cx="12" cy="12" r="4" />
+    <path d="M12 2v3M12 19v3M2 12h3M19 12h3" />
+  </Svg>
+);

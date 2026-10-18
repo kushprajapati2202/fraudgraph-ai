@@ -9,7 +9,7 @@ from backend.api.cases import _account_info, _case_row, _case_transactions, _evi
 from backend.db import connect
 from backend.errors import AppError, not_found
 from backend.models.schemas import AskRequest, ContactScriptRequest, ExplainDayRequest, TranslateRequest
-from backend.services import ai_common, ai_insights, case_ai, mitigation
+from backend.services import ai_common, ai_insights, case_ai, mitigation, red_team
 from backend.services.ai_common import PORTFOLIO
 from backend.services.analysis import load_transactions
 
@@ -88,6 +88,19 @@ def make_rule_tuning() -> dict:
         response = ai_insights.rule_tuning(conn, use_ai=True)
     return ai_common.store(PORTFOLIO, "RULE_TUNING", {}, response,
                            {"suggestions": len(response["result"]["suggestions"]), "applied": False})
+
+
+@router.get("/ai/red-team")
+def get_red_team() -> dict:
+    return _latest_or_rules("RED_TEAM", lambda conn: red_team.run(conn, use_ai=False))
+
+
+@router.post("/ai/red-team")
+def make_red_team() -> dict:
+    with connect() as conn:
+        response = red_team.run(conn, use_ai=True)
+    r = response["result"]
+    return ai_common.store(PORTFOLIO, "RED_TEAM", {}, response, {"tested": r["tested"], "evaded": r["evaded"]})
 
 
 # ---- Case assistants ----

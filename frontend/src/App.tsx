@@ -3,7 +3,7 @@ import { Link, NavLink, Navigate, Route, Routes, useLocation, useParams } from "
 import { api, type AiStatus } from "./api/client";
 import { AiStatusPill } from "./components/AiStatus";
 import GlobalSearch from "./components/GlobalSearch";
-import { IconAudit, IconCases, IconChevron, IconCog, IconMoon, IconNetwork, IconOverview, IconPlay, IconSimulator, IconSun, IconTransactions } from "./components/icons";
+import { IconAudit, IconCases, IconChevron, IconCog, IconMoon, IconNetwork, IconOverview, IconPlay, IconSimulator, IconSun, IconTarget, IconTransactions } from "./components/icons";
 import { InspectorProvider } from "./components/Inspector";
 import { TourProvider, useTour } from "./components/Tour";
 import { AiStatusContext, HealthContext } from "./health";
@@ -12,6 +12,7 @@ import CaseDetailPage from "./pages/CaseDetail";
 import CasesPage from "./pages/Cases";
 import DashboardPage from "./pages/Dashboard";
 import NetworkPage from "./pages/Network";
+import RedTeamPage from "./pages/RedTeam";
 import SettingsPage from "./pages/Settings";
 import TransactionsPage from "./pages/Transactions";
 import WhatIfPage from "./pages/WhatIf";
@@ -24,6 +25,7 @@ const NAV = [
   { to: "/transactions", label: "Transactions", icon: IconTransactions },
   { to: "/network", label: "Network", icon: IconNetwork },
   { to: "/simulator", label: "Simulator", icon: IconSimulator },
+  { to: "/red-team", label: "Red team", icon: IconTarget },
   { to: "/audit", label: "Audit", icon: IconAudit },
 ];
 
@@ -229,6 +231,7 @@ export default function App() {
                     <Route path="/transactions" element={<TransactionsPage />} />
                     <Route path="/network" element={<NetworkPage />} />
                     <Route path="/simulator" element={<WhatIfPage />} />
+                    <Route path="/red-team" element={<RedTeamPage />} />
                     <Route path="/what-if" element={<Navigate to="/simulator" replace />} />
                     <Route path="/audit" element={<AuditPage />} />
                     <Route path="/settings" element={<SettingsPage />} />

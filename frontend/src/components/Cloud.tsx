@@ -60,9 +60,9 @@ export function CaseMlChip({ caseId }: { caseId: string }) {
       href="#sec-ml"
       className={`chip opinion ${chip.cls}`}
       style={{ textDecoration: "none" }}
-      title={`BigQuery ML likelihood ${pct(data.top.probability)} for ${data.top.transaction_id}, rule score ${data.case_rule_score}. A second view, not a finding.`}
+      title={`BigQuery ML likelihood ${pct(data.top.probability)} for ${data.top.transaction_id}, rule score ${data.case_rule_score}. Trained on synthetic labels; a second view, not a finding.`}
     >
-      <span aria-hidden="true">{"◆"}</span> {chip.label} ({pct(data.top.probability)})
+      <span aria-hidden="true">{"◆"}</span> {chip.label} · p={data.top.probability.toFixed(2)}
     </a>
   );
 }
@@ -81,7 +81,7 @@ export function CaseMlCard({ caseId }: { caseId: string }) {
       <div className="card-head">
         <div>
           <h2 id="ml-heading">Second view from BigQuery ML</h2>
-          <div className="card-sub">A boosted-tree model trained on behaviour, independent of the rule weights</div>
+          <div className="card-sub">A boosted-tree model trained on behaviour, independent of the rule weights. Trained on synthetic labels, so its confidence is optimistic.</div>
         </div>
         <span className="chip">BigQuery ML</span>
       </div>
@@ -479,7 +479,11 @@ export function CloudServicesCard() {
           {ml.data.metrics ? (
             <p className="small tnum">
               Held-out evaluation: precision {pct(ml.data.metrics.precision)}, recall {pct(ml.data.metrics.recall)}, ROC AUC{" "}
-              {ml.data.metrics.roc_auc?.toFixed(3) ?? "–"} (synthetic labels)
+              {ml.data.metrics.roc_auc?.toFixed(3) ?? "–"}.
+              <span className="muted">
+                {" "}These scores are optimistic: the synthetic scenarios are defined by the same behaviour the model learns (money moved on within
+                30 minutes), so it separates them almost perfectly. Treat the model as a second opinion, not as measured accuracy.
+              </span>
             </p>
           ) : null}
           {ml.data.global_explain?.length ? (

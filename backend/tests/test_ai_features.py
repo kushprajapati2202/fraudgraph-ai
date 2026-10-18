@@ -229,6 +229,28 @@ def test_translation_needs_an_investigation(client, monkeypatch):
     assert client.get("/api/cases").json()["items"][0]["ai_priority"] in ("HIGH", None)
 
 
+def test_investigation_is_marked_stale_when_case_evidence_changes(client, monkeypatch):
+    from backend.db import connect
+    d = _case(client)
+    cid = d["case"]["case_id"]
+    real = d["evidence"][0]["evidence_id"]
+    _fake(monkeypatch, {"case_summary": "Summary", "observed_facts": [{"statement": "Fact", "evidence_ids": [real]}],
+                        "risk_indicators": [], "alternative_explanations": [], "uncertainties": [],
+                        "recommended_next_steps": ["Call"], "review_priority": "HIGH"})
+    client.post(f"/api/cases/{cid}/investigate", json={})
+    assert client.get(f"/api/cases/{cid}").json()["latest_investigation"]["stale"] is False
+
+    # Simulate evidence that joined the case after Gemini read it.
+    with connect() as conn:
+        row = conn.execute("SELECT investigation_id, result_json FROM ai_investigations WHERE case_id = ? "
+                           "ORDER BY investigation_id DESC LIMIT 1", (cid,)).fetchone()
+        resp = json.loads(row["result_json"])
+        resp["evidence_ids_sent"] = resp["evidence_ids_sent"][1:]
+        conn.execute("UPDATE ai_investigations SET result_json = ? WHERE investigation_id = ?",
+                     (json.dumps(resp), row["investigation_id"]))
+    assert client.get(f"/api/cases/{cid}").json()["latest_investigation"]["stale"] is True
+
+
 def test_case_ai_never_changes_case_state(client, monkeypatch):
     d = _case(client)
     cid = d["case"]["case_id"]
