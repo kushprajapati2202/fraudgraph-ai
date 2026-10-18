@@ -97,13 +97,15 @@ export function SecondOpinionNote({ band, result }: { band: CaseDetail["case"]["
 
 /** Translate the latest investigation summary and read it aloud. */
 export function TranslatePanel({ caseId, record, investigation }: { caseId: string; record?: Insight<any>; investigation: InvestigationResult }) {
-  const [lang, setLang] = useState<LanguageCode>((record?.request.language as LanguageCode) ?? "hi");
+  // English (the original summary) by default; a translation is shown only after picking another language.
+  const [lang, setLang] = useState<LanguageCode>("en");
   const [rec, setRec] = useState(record);
   const { busy, error, run } = useRun();
   const { speak, speaking, supported } = useSpeech();
   const [note, setNote] = useState<string | null>(null);
   useEffect(() => setRec(record), [record]);
-  const shown = rec?.response.status === "OK" && rec.request.language === lang ? rec.response.result : null;
+  const english = lang === "en";
+  const shown = !english && rec?.response.status === "OK" && rec.request.language === lang ? rec.response.result : null;
   const speechLang = LANGUAGES.find((l) => l.code === lang)?.speech ?? "en-IN";
 
   function listen() {
@@ -117,12 +119,17 @@ export function TranslatePanel({ caseId, record, investigation }: { caseId: stri
         <label className="inline">
           <span className="label" style={{ margin: 0 }}>Summary in</span>
           <select value={lang} onChange={(e) => setLang(e.target.value as LanguageCode)}>
-            {LANGUAGES.filter((l) => l.code !== "en").map((l) => (
+            {LANGUAGES.map((l) => (
               <option key={l.code} value={l.code}>{l.label}</option>
             ))}
           </select>
         </label>
-        <button className="btn btn-small" onClick={async () => { const r = await run(() => api.translate(caseId, lang)); if (r) setRec(r); }} disabled={busy}>
+        <button
+          className="btn btn-small"
+          onClick={async () => { const r = await run(() => api.translate(caseId, lang)); if (r) setRec(r); }}
+          disabled={busy || english}
+          title={english ? "The summary is already in English; pick another language to translate" : undefined}
+        >
           {busy ? "Translating..." : "Translate"}
         </button>
         {supported ? (
@@ -134,7 +141,7 @@ export function TranslatePanel({ caseId, record, investigation }: { caseId: stri
       {busy ? <Busy label="Gemini is translating..." /> : null}
       {error ? <div className="callout callout-error" role="alert">{error}</div> : null}
       {note ? <p className="muted small">{note}</p> : null}
-      {rec && rec.request.language === lang ? <Unavailable rec={rec} what="Translation" /> : null}
+      {rec && !english && rec.request.language === lang ? <Unavailable rec={rec} what="Translation" /> : null}
       {shown ? (
         <details className="translated" lang={lang} open>
           <summary className="section-title" style={{ cursor: "pointer" }}>{LANGUAGES.find((l) => l.code === lang)?.label}</summary>
