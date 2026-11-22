@@ -1,5 +1,6 @@
 import logging
 import os
+import sqlite3
 import time
 import uuid
 from contextlib import asynccontextmanager
@@ -10,7 +11,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from backend.api import accounts, ai, analysis, audit, cases, cloud, dashboard, demo, graph, health, transactions
+from backend.api import accounts, ai, analysis, assistant, audit, cases, cloud, dashboard, demo, graph, health, transactions
 from backend.config import APP_VERSION, settings
 from backend.db import connect, init_schema
 from backend.errors import AppError, error_body
@@ -107,6 +108,23 @@ async def http_error_handler(_: Request, exc: StarletteHTTPException):
     return JSONResponse(status_code=exc.status_code, content=error_body(code, message))
 
 
+@app.exception_handler(sqlite3.IntegrityError)
+async def integrity_handler(request: Request, exc: sqlite3.IntegrityError):
+    # A uniqueness or reference check lost a race with a concurrent request: a conflict, not a server fault.
+    logger.warning("request_id=%s integrity conflict: %s", getattr(request.state, "request_id", "-"), exc)
+    return JSONResponse(status_code=409, content=error_body(
+        "CONFLICT", "The request conflicted with a concurrent change. Refresh and try again.", []))
+
+
+@app.exception_handler(sqlite3.OperationalError)
+async def operational_handler(request: Request, exc: sqlite3.OperationalError):
+    if "locked" in str(exc) or "busy" in str(exc):
+        logger.warning("request_id=%s database busy: %s", getattr(request.state, "request_id", "-"), exc)
+        return JSONResponse(status_code=503, headers={"Retry-After": "1"}, content=error_body(
+            "BUSY", "The workspace is busy with another update. Try again in a moment.", []))
+    return await unhandled_handler(request, exc)
+
+
 @app.exception_handler(Exception)
 async def unhandled_handler(request: Request, exc: Exception):
     request_id = getattr(request.state, "request_id", "-")
@@ -115,7 +133,7 @@ async def unhandled_handler(request: Request, exc: Exception):
         "INTERNAL_ERROR", f"An unexpected error occurred (request {request_id}).", []))
 
 
-for module in (health, dashboard, demo, transactions, accounts, analysis, graph, cases, ai, cloud, audit):
+for module in (health, dashboard, demo, transactions, accounts, analysis, graph, cases, ai, assistant, cloud, audit):
     app.include_router(module.router, prefix="/api")
 
 

@@ -137,3 +137,56 @@ export const IconTarget = (p: P) => (
     <path d="M12 2v3M12 19v3M2 12h3M19 12h3" />
   </Svg>
 );
+export const IconSend = (p: P) => (
+  <Svg {...p}>
+    <path d="M12 19V5" />
+    <path d="M6 11l6-6 6 6" />
+  </Svg>
+);
+export const IconPlus = (p: P) => (
+  <Svg {...p}>
+    <path d="M12 5v14M5 12h14" />
+  </Svg>
+);
+export const IconTrash = (p: P) => (
+  <Svg {...p}>
+    <path d="M4 7h16M10 11v6M14 11v6" />
+    <path d="M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3" />
+  </Svg>
+);
+export const IconChat = (p: P) => (
+  <Svg {...p}>
+    <path d="M21 12a8 8 0 0 1-11.600 7.100L4 20l1-4.600A8 8 0 1 1 21 12z" />
+  </Svg>
+);
+export const IconMenu = (p: P) => (
+  <Svg {...p}>
+    <path d="M4 7h16" />
+    <path d="M4 12h16" />
+    <path d="M4 17h16" />
+  </Svg>
+);
+export const IconClose = (p: P) => (
+  <Svg {...p}>
+    <path d="M6 6l12 12" />
+    <path d="M18 6L6 18" />
+  </Svg>
+);
+export const IconBolt = (p: P) => (
+  <Svg {...p}>
+    <path d="M13 3L5 13h6l-1 8 8-10h-6l1-8z" />
+  </Svg>
+);
+export const IconInfo = (p: P) => (
+  <Svg {...p}>
+    <circle cx="12" cy="12" r="9" />
+    <path d="M12 11v5" />
+    <path d="M12 8h.01" />
+  </Svg>
+);
+export const IconPanel = (p: P) => (
+  <Svg {...p}>
+    <rect x="3" y="4" width="18" height="16" rx="2" />
+    <path d="M15 4v16" />
+  </Svg>
+);

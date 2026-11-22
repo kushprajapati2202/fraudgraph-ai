@@ -1,9 +1,8 @@
-import { useState, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { api, type RecommendationKind } from "../api/client";
 import { usePrefs } from "../prefs";
 import { useAsync } from "../util";
-import { AskBigQueryCard, cloudOn, useCloud } from "./Cloud";
 import { Empty, ErrorState, RiskBadge } from "./common";
 import { IconCases, IconChevron, IconClock, IconLock, IconRefresh, IconSparkle } from "./icons";
 
@@ -18,15 +17,11 @@ const KIND: Record<RecommendationKind, { icon: ReactNode; tone: string; label: s
 
 /**
  * The overview's "For you" card: up to five next steps for the analyst named in Settings, most urgent first
- * (rule-based on the server; the placeholder name gets a team-wide list), with Ask BigQuery as a second tab
- * when BigQuery is configured. `refreshKey` reloads the recommendations.
+ * (rule-based on the server; the placeholder name gets a team-wide list). `refreshKey` reloads the list.
  */
 export default function RecommendationsCard({ refreshKey }: { refreshKey: number }) {
   const { analystName } = usePrefs();
   const recs = useAsync(() => api.recommendations(analystName), [analystName, refreshKey]);
-  const bigquery = cloudOn(useCloud(), "bigquery");
-  const [tab, setTab] = useState<"recs" | "bigquery">("recs");
-  const shown = bigquery ? tab : "recs";
   const r = recs.data;
   const first = analystName.trim().split(/\s+/)[0];
 
@@ -34,42 +29,12 @@ export default function RecommendationsCard({ refreshKey }: { refreshKey: number
     <section className="card card-flush" aria-labelledby="recs-heading" data-tour="dash-recs">
       <div className="card-head">
         <div>
-          <h2 id="recs-heading">
-            {shown === "bigquery" ? (
-              <><span className="ai-mark"><IconSparkle size={17} /></span> Ask BigQuery</>
-            ) : r?.personalized ? `Recommended for you, ${first}` : "Recommended next steps"}
-          </h2>
+          <h2 id="recs-heading">{r?.personalized ? `Recommended for you, ${first}` : "Recommended next steps"}</h2>
           <div className="card-sub">
-            {shown === "bigquery"
-              ? "Questions over the full analytics dataset"
-              : r?.personalized ? "Based on your tasks, holds and decisions. Most urgent first." : "For the whole team. Most urgent first."}
+            {r?.personalized ? "Based on your tasks, holds and decisions. Most urgent first." : "For the whole team. Most urgent first."}
           </div>
         </div>
-        <div className="card-tools">
-          {bigquery ? (
-            <div className="segmented" role="tablist" aria-label="For you" style={{ marginBottom: 0 }}>
-              <button role="tab" aria-selected={shown === "recs"} className={shown === "recs" ? "active" : ""} onClick={() => setTab("recs")}>
-                Next steps{r?.items.length ? ` (${r.items.length})` : ""}
-              </button>
-              <button role="tab" aria-selected={shown === "bigquery"} className={shown === "bigquery" ? "active" : ""} onClick={() => setTab("bigquery")}>
-                Ask BigQuery
-              </button>
-            </div>
-          ) : null}
-          {shown === "recs" && r && !r.personalized ? (
-            <Link to="/settings" className="btn btn-small">
-              Set your name
-            </Link>
-          ) : null}
-        </div>
       </div>
-      {/* Both panels stay mounted so a BigQuery answer survives switching tabs. */}
-      {bigquery ? (
-        <div role="tabpanel" hidden={shown !== "bigquery"} style={{ padding: "0 18px 18px" }}>
-          <AskBigQueryCard embedded />
-        </div>
-      ) : null}
-      <div role="tabpanel" hidden={shown !== "recs"}>
       {recs.error ? (
         <div style={{ padding: "0 18px 18px" }}>
           <ErrorState message={recs.error} onRetry={recs.reload} />
@@ -101,14 +66,8 @@ export default function RecommendationsCard({ refreshKey }: { refreshKey: number
               );
             })}
           </ul>
-          {!r.personalized ? (
-            <p className="muted small" style={{ padding: "10px 18px 14px", margin: 0, borderTop: "1px solid var(--border)" }}>
-              Set your name in Settings to see your own tasks, holds and follow-ups here.
-            </p>
-          ) : null}
         </>
       )}
-      </div>
     </section>
   );
 }

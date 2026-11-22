@@ -165,6 +165,11 @@ def store(scope: str, kind: str, request: dict, response: dict, audit_extra: dic
         return _present(conn, row)
 
 
+def get(conn: sqlite3.Connection, insight_id: int) -> dict | None:
+    row = conn.execute("SELECT * FROM ai_insights WHERE insight_id = ?", (insight_id,)).fetchone()
+    return _present(conn, row) if row else None
+
+
 def latest(conn: sqlite3.Connection, scope: str, kind: str, request: dict | None = None) -> dict | None:
     """Most recent stored result of a kind; with `request`, only one generated for the same request."""
     for row in conn.execute("SELECT * FROM ai_insights WHERE scope = ? AND kind = ? ORDER BY insight_id DESC LIMIT 25",

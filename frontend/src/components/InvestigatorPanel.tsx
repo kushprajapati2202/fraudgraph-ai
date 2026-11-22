@@ -156,11 +156,11 @@ export default function InvestigatorPanel({ caseId, evidence, latest: saved, cha
   const ai = useAiStatus();
   const aiNote =
     ai.status?.state === "CONNECTED"
-      ? ` Connected (${ai.status.active_model}).`
+      ? " Gemini is connected."
       : ai.status?.state === "DEGRADED"
         ? " Gemini is busy right now; the request may take longer or fall back."
         : ai.status && ai.status.state !== "NOT_CONFIGURED"
-          ? ` ${ai.status.message}`
+          ? " Gemini is unavailable right now, so findings fall back to the rules. See Settings for details."
           : "";
 
   async function run() {
@@ -270,7 +270,7 @@ export default function InvestigatorPanel({ caseId, evidence, latest: saved, cha
             </div>
           ) : null}
           <div className="ai-meta muted small">
-            {resp?.model} &middot; {resp?.prompt_version} &middot; {fmtTime(latest?.created_at)}
+            Last updated {fmtTime(latest?.created_at)} UTC
             {latest?.question ? <> &middot; focus: &ldquo;{latest.question}&rdquo;</> : null}
           </div>
           <InvestigationDetails
@@ -328,7 +328,7 @@ export default function InvestigatorPanel({ caseId, evidence, latest: saved, cha
       {fullView && result ? (
         <Modal
           title={<><span className="ai-mark" aria-hidden="true">{"✦"}</span> Gemini investigation</>}
-          subtitle={<>{caseId} &middot; {resp?.model} &middot; {fmtTime(latest?.created_at)} UTC{latest?.question ? <> &middot; focus: &ldquo;{latest.question}&rdquo;</> : null}</>}
+          subtitle={<>{caseId} &middot; {fmtTime(latest?.created_at)} UTC{latest?.question ? <> &middot; focus: &ldquo;{latest.question}&rdquo;</> : null}</>}
           onClose={closeFullView}
           footer={<span className="chip chip-ai">AI-generated &middot; advisory only</span>}
         >

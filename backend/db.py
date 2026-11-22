@@ -162,6 +162,20 @@ CREATE TABLE IF NOT EXISTS ai_insights (
     created_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS ix_insights_scope ON ai_insights(scope, kind);
+CREATE TABLE IF NOT EXISTS assistant_sessions (
+    session_id TEXT PRIMARY KEY,
+    title TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS assistant_messages (
+    message_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id TEXT NOT NULL REFERENCES assistant_sessions(session_id) ON DELETE CASCADE,
+    question TEXT NOT NULL,
+    insight_id INTEGER NOT NULL,
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS ix_assistant_messages ON assistant_messages(session_id, message_id);
 CREATE TABLE IF NOT EXISTS ml_scores (
     transaction_id TEXT PRIMARY KEY,
     probability REAL NOT NULL,
@@ -200,7 +214,8 @@ CREATE TABLE IF NOT EXISTS analysis_runs (
 TABLES = [
     "meta", "accounts", "transactions", "labels", "risk_assessments", "cases",
     "case_evidence", "analyst_decisions", "mitigation_actions", "transfer_controls", "case_documents", "ai_investigations",
-    "ai_insights", "audit_events", "analysis_runs", "ml_scores", "stream_events",
+    "ai_insights", "audit_events", "analysis_runs", "ml_scores", "stream_events", "assistant_messages",
+    "assistant_sessions",
 ]
 
 # Columns added after a table first shipped; applied to databases created by an older build.
@@ -221,9 +236,14 @@ def _connect() -> sqlite3.Connection:
 
 
 @contextmanager
-def connect() -> Iterator[sqlite3.Connection]:
+def connect(write: bool = False) -> Iterator[sqlite3.Connection]:
+    """write=True takes SQLite's write lock up front (BEGIN IMMEDIATE), so a handler that checks state and then
+    writes ("is this ID free?", "is this transfer still held?") cannot interleave with another writer between the
+    check and the write. Readers are unaffected."""
     conn = _connect()
     try:
+        if write:
+            conn.execute("BEGIN IMMEDIATE")
         yield conn
         conn.commit()
     except Exception:
@@ -233,8 +253,21 @@ def connect() -> Iterator[sqlite3.Connection]:
         conn.close()
 
 
+def _schema_statements() -> list[str]:
+    statements, buffer = [], ""
+    for line in SCHEMA.splitlines(keepends=True):
+        buffer += line
+        if sqlite3.complete_statement(buffer):
+            statements.append(buffer.strip())
+            buffer = ""
+    return [s for s in statements if s]
+
+
 def init_schema(conn: sqlite3.Connection) -> None:
-    conn.executescript(SCHEMA)
+    # Statement by statement rather than executescript(): executescript() COMMITs any open transaction first, which
+    # during a reset would publish the dropped tables to concurrent readers ("no such table").
+    for statement in _schema_statements():
+        conn.execute(statement)
     for table, columns in ADDED_COLUMNS.items():
         present = {r["name"] for r in conn.execute(f"PRAGMA table_info({table})")}
         for name, decl in columns.items():

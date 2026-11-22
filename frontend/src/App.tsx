@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, NavLink, Navigate, Route, Routes, useLocation, useParams } from "react-router-dom";
 import { api, type AiStatus } from "./api/client";
-import { AiStatusPill } from "./components/AiStatus";
+import { AssistantPanel, AssistantProvider, useAssistant } from "./components/Assistant";
 import GlobalSearch from "./components/GlobalSearch";
-import { IconAudit, IconCases, IconChevron, IconCog, IconMoon, IconNetwork, IconOverview, IconPlay, IconSimulator, IconSun, IconTarget, IconTransactions } from "./components/icons";
+import { IconAudit, IconCases, IconChevron, IconCog, IconMoon, IconNetwork, IconOverview, IconPlay, IconSimulator, IconSun, IconTarget, IconTransactions, IconUser } from "./components/icons";
 import { InspectorProvider } from "./components/Inspector";
 import { TourProvider, useTour } from "./components/Tour";
 import { AiStatusContext, HealthContext } from "./health";
@@ -16,7 +16,7 @@ import RedTeamPage from "./pages/RedTeam";
 import SettingsPage from "./pages/Settings";
 import TransactionsPage from "./pages/Transactions";
 import WhatIfPage from "./pages/WhatIf";
-import { initials, usePrefs } from "./prefs";
+import { usePrefs } from "./prefs";
 import { errorMessage, useAsync, usePageTitle } from "./util";
 
 const NAV = [
@@ -80,6 +80,13 @@ function ScrollToTop() {
     if (!hash) window.scrollTo(0, 0);
   }, [pathname, hash]);
   return null;
+}
+
+/** Old links to the Assistant page: the assistant is now a side panel, opened on the chat list. */
+function AssistantRedirect() {
+  const { show } = useAssistant();
+  useEffect(() => show("history"), [show]);
+  return <Navigate to="/" replace />;
 }
 
 /** Remount the case page per case, so nothing from the previous case (data, path selection, open forms) carries over. */
@@ -156,6 +163,7 @@ export default function App() {
       <AiStatusContext.Provider value={ai}>
         <InspectorProvider>
           <TourProvider>
+            <AssistantProvider>
             <ScrollToTop />
             <a className="skip-link" href="#main">
               Skip to content
@@ -186,13 +194,6 @@ export default function App() {
                   </NavLink>
                 </nav>
                 <div className="side-foot">
-                  <div className="env-badge" data-tour="env" title="This workspace runs on a synthetic dataset. No real customer data is loaded and no real payment is created, blocked or changed.">
-                    <span className="env-dot" aria-hidden="true" />
-                    <span className="side-label">
-                      <strong>Sandbox environment</strong>
-                      Synthetic data &middot; {health?.dataset_version ?? "..."}
-                    </span>
-                  </div>
                   <div className="side-version">
                     v{health?.app_version ?? "-"} &middot; {health?.rule_version ?? "-"}
                   </div>
@@ -214,12 +215,10 @@ export default function App() {
                 <header className="topbar">
                   <GlobalSearch />
                   <div className="topbar-tools">
-                    <AiStatusPill />
                     <TourButton />
                     <ThemeToggle />
-                    <Link to="/settings" className="user-chip" title="Profile and settings">
-                      <span className="avatar avatar-sm">{initials(analystName)}</span>
-                      <span className="user-chip-name">{analystName}</span>
+                    <Link to="/settings" className="user-chip" title={`${analystName} · Profile and settings`} aria-label={`${analystName}: profile and settings`}>
+                      <span className="avatar avatar-sm"><IconUser size={15} /></span>
                     </Link>
                   </div>
                 </header>
@@ -231,6 +230,7 @@ export default function App() {
                     <Route path="/transactions" element={<TransactionsPage />} />
                     <Route path="/network" element={<NetworkPage />} />
                     <Route path="/simulator" element={<WhatIfPage />} />
+                    <Route path="/assistant" element={<AssistantRedirect />} />
                     <Route path="/red-team" element={<RedTeamPage />} />
                     <Route path="/what-if" element={<Navigate to="/simulator" replace />} />
                     <Route path="/audit" element={<AuditPage />} />
@@ -243,7 +243,9 @@ export default function App() {
                   data.
                 </footer>
               </div>
+              <AssistantPanel />
             </div>
+            </AssistantProvider>
           </TourProvider>
         </InspectorProvider>
       </AiStatusContext.Provider>

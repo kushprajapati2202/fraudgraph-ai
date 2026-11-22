@@ -1,7 +1,7 @@
 import json
 from typing import Literal
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Path, Query
 
 from backend.db import connect, dumps, utcnow
 from backend.errors import AppError, not_found
@@ -292,7 +292,7 @@ def record_decision(case_id: str, body: DecisionRequest) -> dict:
                        [{"field": "rationale"}])
     actor = (body.actor_label or "Analyst").strip()
     now = utcnow()
-    with connect() as conn:
+    with connect(write=True) as conn:
         case = _case_row(conn, case_id)
         status = DECISION_TO_STATUS[body.decision]
         cur = conn.execute(
@@ -334,7 +334,7 @@ def approve_action(case_id: str, body: ActionRequest) -> dict:
     actor = (body.actor_label or "Analyst").strip()
     note = body.note.strip() if body.note else None
     now = utcnow()
-    with connect() as conn:
+    with connect(write=True) as conn:
         case = _case_row(conn, case_id)
         if body.target_account and body.target_account not in case["accounts"]:
             raise AppError(422, "VALIDATION_ERROR", f"{body.target_account} is not part of this case.",
@@ -365,12 +365,12 @@ def approve_action(case_id: str, body: ActionRequest) -> dict:
 
 
 @router.post("/cases/{case_id}/actions/{action_id}/close")
-def close_action(case_id: str, action_id: int, body: CloseActionRequest) -> dict:
+def close_action(case_id: str, body: CloseActionRequest, action_id: int = Path(ge=1, le=2**63 - 1)) -> dict:
     """Lift a control or complete a task, with the outcome. Transfers already held stay held until resolved."""
     actor = (body.actor_label or "Analyst").strip()
     outcome = body.outcome.strip()
     now = utcnow()
-    with connect() as conn:
+    with connect(write=True) as conn:
         _case_row(conn, case_id)
         row = conn.execute("SELECT * FROM mitigation_actions WHERE action_id = ? AND case_id = ?",
                            (action_id, case_id)).fetchone()
@@ -398,7 +398,7 @@ def resolve_held_transfer(case_id: str, transaction_id: str, body: HeldTransferR
     note = body.note.strip()
     now = utcnow()
     status = "RELEASED" if body.resolution == "RELEASE" else "REJECTED"
-    with connect() as conn:
+    with connect(write=True) as conn:
         _case_row(conn, case_id)
         row = conn.execute(
             "SELECT tc.*, t.amount FROM transfer_controls tc JOIN transactions t ON t.transaction_id = tc.transaction_id "

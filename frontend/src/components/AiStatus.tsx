@@ -35,10 +35,9 @@ export function AiStatusPill() {
       data-tour="ai-status"
       onClick={() => recheck(true)}
       disabled={checking}
-      title={`${v.title}. ${status.message} Click to re-check.`}
+      title={`${v.title}. Click to re-check.`}
     >
       {checking ? <span className="spinner" aria-hidden="true" /> : <span aria-hidden="true">{v.icon}</span>} {v.short}
-      {status.active_model ? <span className="ai-pill-model"> &middot; {status.active_model}</span> : null}
     </button>
   );
 }

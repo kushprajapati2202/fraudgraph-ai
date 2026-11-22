@@ -38,7 +38,7 @@ Simulator ----------> Pub/Sub topic ----------> Cloud Run /api/cloud/stream/push
                                          BigQuery dataset `fraudgraph`             Cloud Storage snapshot
                                            |-- transfers, cases, accounts, decisions, mitigation_actions, labels
                                            |-- ml_features (view) -> mule_risk_model (BQML) -> ML.EXPLAIN_PREDICT
-                                           '-- Ask BigQuery: Gemini SQL, dry-run gated, 200 MB cap
+                                           '-- Assistant analytics: Gemini SQL, dry-run gated, 200 MB cap
 Document upload -> Gemini (vision) ---+--> code compares the two readings --> verdict (lowered on disagreement)
                 -> Document AI -------'
 Case -> Vertex AI Search (policy library) -> passages POL-n -> Gemini steps citing POL-n (allow-list checked)
@@ -77,7 +77,7 @@ The prototype runs as one Cloud Run instance on purpose: it keeps the free-trial
 
 **What already scales**
 - **Ingest** is event-driven. Transfers arrive through Pub/Sub push, idempotently, so a burst queues in the topic rather than in the API.
-- **Analytics and ML** run in BigQuery, which the app never queries on a page load: dashboards read SQLite, *Ask BigQuery* and BigQuery ML read the mirror, and model scores are copied back in batches.
+- **Analytics and ML** run in BigQuery, which the app never queries on a page load: dashboards read SQLite, the assistant's analytics questions and BigQuery ML read the mirror, and model scores are copied back in batches.
 - **Gemini** is called through Vertex AI with a service account, a model fallback chain and per-call time budgets, so model load does not take the app down.
 - **The API is stateless** apart from the database connection, and Cloud Run already scales it to zero when idle.
 

@@ -9,7 +9,7 @@ export function reasonText(reason: string | null | undefined): string {
   return (reason ?? "error").replace(/_/g, " ").toLowerCase();
 }
 
-/** Where a result came from: Gemini (model, time) or the rule-based fallback (and why). */
+/** Where a result came from: Gemini (with time) or the rule-based fallback (and why). Model names stay on the Settings page. */
 export function SourceNote({ rec }: { rec: Insight<unknown> }) {
   const r = rec.response;
   const when = rec.insight_id ? ` · ${fmtTime(rec.created_at)} UTC` : "";
@@ -17,8 +17,7 @@ export function SourceNote({ rec }: { rec: Insight<unknown> }) {
   if (r.source === "GEMINI") {
     return (
       <span className="source-note">
-        <span className="chip chip-ai">Gemini</span> {r.model}
-        {when} {stale}
+        {rec.insight_id ? `Last updated ${fmtTime(rec.created_at)} UTC` : ""} {stale}
       </span>
     );
   }

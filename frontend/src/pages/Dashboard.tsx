@@ -3,7 +3,8 @@ import { Link } from "react-router-dom";
 import { api, type AuditEvent } from "../api/client";
 import { SecondOpinion } from "../components/ai";
 import { ActivityChart, BandMix, HBars } from "../components/charts";
-import { AskPortfolio, BriefingCard, DayExplain, PatternsCard } from "../components/DashboardAi";
+import { AssistantCard } from "../components/Assistant";
+import { BriefingCard, DayExplain, PatternsCard } from "../components/DashboardAi";
 import { Empty, ErrorState, Loading, ScoreRing, StatusChip } from "../components/common";
 import RecommendationsCard from "../components/Recommendations";
 import { IconCases, IconChevron, IconFlow, IconLock, IconRefresh, IconSparkle, IconTransactions, IconUser } from "../components/icons";
@@ -49,7 +50,7 @@ function activityText(e: FeedEvent): string {
     case "AI_REPORT":
       return p.status === "OK" ? "Gemini drafted an escalation report" : "Escalation report draft unavailable";
     case "AI_BRIEFING":
-      return p.source === "GEMINI" ? "Gemini wrote the shift briefing" : "Shift briefing refreshed (rule-based)";
+      return p.source === "GEMINI" ? "Gemini wrote the threat briefing" : "Threat briefing refreshed (rule-based)";
     case "AI_PATTERNS":
       return `${p.source === "GEMINI" ? "Gemini" : "Rules"} grouped active cases into ${p.patterns} pattern${p.patterns === 1 ? "" : "s"}`;
     case "AI_NARRATION":
@@ -161,7 +162,7 @@ export default function DashboardPage() {
       {notice ? <div className="callout callout-ok" role="status">{notice}</div> : null}
       {error ? <div className="callout callout-error" role="alert">{error}</div> : null}
 
-      <AskPortfolio />
+      <AssistantCard />
 
       <div className="kpis" data-tour="dash-stats">
         <div className="kpi">

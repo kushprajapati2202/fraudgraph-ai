@@ -202,124 +202,55 @@ export function PolicyCard({ caseId }: { caseId: string }) {
   );
 }
 
-// ---- Overview: Ask BigQuery (Gemini writes the query, code gates it; the query itself is never shown) ----
+// ---- Assistant: BigQuery analytics answer (Gemini writes the query, code gates it; the query itself is never shown) ----
 
-const BQ_EXAMPLES = [
-  "Total amount and transfer count by channel for flagged transfers",
-  "Daily count of high-priority transfers in September",
-  "Which receiving accounts got money from the most distinct senders?",
-  "How much money is currently held by controls, per case?",
-];
-
-/** `embedded` renders the panel without its own card, for use inside another card (the overview's "For you" card). */
-export function AskBigQueryCard({ embedded = false }: { embedded?: boolean }) {
-  const cloud = useCloud();
-  const [question, setQuestion] = useState("");
-  const [rec, setRec] = useState<Insight<BigQueryAskResult> | null>(null);
-  const { busy, error, run } = useRun();
-  if (!cloudOn(cloud, "bigquery")) return null;
-  const ask = (q: string) => {
-    setQuestion(q);
-    run(() => api.askBigQuery(q)).then((r) => r && setRec(r));
-  };
-  const r = rec?.response.result;
+/** The body of an analytics answer inside the overview assistant: chart, rows and the safety checks that ran. */
+export function BigQueryAnswer({ r }: { r: BigQueryAskResult }) {
   const chartItems =
-    r && r.chart !== "TABLE"
+    r.chart !== "TABLE"
       ? r.rows.slice(0, 15).map((row, i) => ({ key: String(i), label: String(row[r.x_column]), value: Number(row[r.y_column]) || 0 }))
       : [];
-  const Wrap = embedded ? "div" : "section";
   return (
-    <Wrap className={embedded ? "bq-embedded" : "card ai-card"} aria-labelledby={embedded ? undefined : "bq-heading"} id="sec-bigquery">
-      {embedded ? (
-        <p className="muted small" style={{ marginTop: 0 }}>Answers come straight from the analytics data. Every query is read-only and checked before it runs.</p>
-      ) : (
-        <div className="card-head">
-          <div>
-            <AiTitle id="bq-heading">Ask BigQuery</AiTitle>
-            <div className="card-sub">Answers come straight from the analytics data. Every query is read-only and checked before it runs</div>
-          </div>
-          <span className="chip">BigQuery</span>
-        </div>
-      )}
-      <form
-        className="row"
-        style={{ gap: 8 }}
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (question.trim().length >= 3) ask(question.trim());
-        }}
-      >
-        <input className="input" style={{ flex: 1 }} value={question} maxLength={300} placeholder="Ask anything about transfers, cases, accounts or controls" onChange={(e) => setQuestion(e.target.value)} aria-label="Question for BigQuery" />
-        <button className="btn btn-ai" disabled={busy || question.trim().length < 3}>
-          Ask
-        </button>
-      </form>
-      <div className="chip-row" style={{ marginTop: 8 }}>
-        {BQ_EXAMPLES.map((q) => (
-          <button key={q} className="chip chip-button" disabled={busy} onClick={() => ask(q)}>
-            {q}
-          </button>
-        ))}
-      </div>
-      {busy ? <Busy label="Looking up the answer" /> : null}
-      {error ? <ErrorState message={error} /> : null}
-      {rec ? <Unavailable rec={rec} what="Gemini" /> : null}
-      {r ? (
-        <div style={{ marginTop: 12 }}>
-          <p>
-            <strong>{r.answer}</strong>
-          </p>
-          <p className="small muted">{r.interpretation}</p>
-          {chartItems.length ? (
-            <div style={{ marginTop: 8 }}>
-              <HBars unit="" items={chartItems} format={(v) => v.toLocaleString("en-IN")} />
-            </div>
-          ) : null}
-          {r.rows.length ? (
-            <div className="table-wrap" style={{ marginTop: 8, maxHeight: 280, overflow: "auto" }}>
-              <table className="table small">
-                <thead>
-                  <tr>
-                    {r.columns.map((c) => (
-                      <th key={c}>{c}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {r.rows.slice(0, 50).map((row, i) => (
-                    <tr key={i}>
-                      {r.columns.map((c) => (
-                        <td key={c} className={typeof row[c] === "number" ? "num tnum" : undefined}>
-                          {cell(c, row[c])}
-                        </td>
-                      ))}
-                    </tr>
+    <div className="stack-sm">
+      {chartItems.length ? <HBars unit="" items={chartItems} format={(v) => v.toLocaleString("en-IN")} /> : null}
+      {r.rows.length ? (
+        <div className="table-wrap" style={{ maxHeight: 280, overflow: "auto" }}>
+          <table className="table small">
+            <thead>
+              <tr>
+                {r.columns.map((c) => (
+                  <th key={c} scope="col">{c}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {r.rows.slice(0, 50).map((row, i) => (
+                <tr key={i}>
+                  {r.columns.map((c) => (
+                    <td key={c} className={typeof row[c] === "number" ? "num tnum" : undefined}>
+                      {cell(c, row[c])}
+                    </td>
                   ))}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <Empty>No rows matched.</Empty>
-          )}
-          <details style={{ marginTop: 10 }}>
-            <summary className="small" style={{ cursor: "pointer", color: "var(--muted)", fontWeight: 600 }}>
-              Safety checks
-            </summary>
-            <ul className="small muted">
-              <li>Read-only: the query can only look at the analytics data, never change it.</li>
-              <li>
-                Cost checked before running: {(r.bytes_billed / 1024).toFixed(0)} KB processed (limit 200 MB).
-              </li>
-              {r.repairs ? <li>The first attempt did not pass the checks and was rewritten automatically.</li> : null}
-              <li>Answer: {r.answer_source === "GEMINI" ? "written by Gemini; every number was checked against the rows" : "plain summary (Gemini's text did not pass the number check)"}.</li>
-            </ul>
-          </details>
-          <div style={{ marginTop: 6 }}>
-            <SourceNote rec={rec!} />
-          </div>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
-      ) : null}
-    </Wrap>
+      ) : (
+        <Empty>No rows matched.</Empty>
+      )}
+      <details>
+        <summary className="small" style={{ cursor: "pointer", color: "var(--muted)", fontWeight: 600 }}>
+          Safety checks
+        </summary>
+        <ul className="small muted">
+          <li>Read-only: the query can only look at the analytics data, never change it.</li>
+          <li>Cost checked before running: {(r.bytes_billed / 1024).toFixed(0)} KB processed (limit 200 MB).</li>
+          {r.repairs ? <li>The first attempt did not pass the checks and was rewritten automatically.</li> : null}
+          <li>Answer: {r.answer_source === "GEMINI" ? "written by Gemini; every number was checked against the rows" : "plain summary (Gemini's text did not pass the number check)"}.</li>
+        </ul>
+      </details>
+    </div>
   );
 }
 
