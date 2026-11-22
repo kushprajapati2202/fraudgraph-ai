@@ -123,3 +123,51 @@ def test_case_question_without_gemini_is_reported_unavailable(client):
 
 def test_unknown_attached_case_is_404(client):
     assert client.post("/api/assistant/ask", json={"question": "Why?", "case_id": "CASE-NOPE"}).status_code == 404
+
+
+CASE_PLAN = PLAN | {"target": "CASES", "min_amount": 0, "channels": [], "sort": "SCORE_DESC", "limit": 1,
+                    "interpretation": "The active case with the highest risk score",
+                    "unsupported": "The filters cannot explain why a case scores what it does."}
+
+
+def test_which_case_and_why_explains_the_top_case_from_its_evidence(client, monkeypatch):
+    top = client.get("/api/cases").json()["items"][0]["case_id"]
+    real = client.get(f"/api/cases/{top}").json()["evidence"][0]["evidence_id"]
+    chat_prompts = []
+
+    def fake(system, prompt, schema, attachment=None):
+        if schema.__name__ == "ChatAnswer":
+            chat_prompts.append(prompt)
+            return json.dumps({"answer": f"Funds fanned out within minutes ({real}).", "evidence_ids": [real, "EV-FAKE"]})
+        return json.dumps(CASE_PLAN)
+    monkeypatch.setattr(gemini_service, "generate_json", fake)
+    out = _ask(client, "Which case has the highest risk score and why?")
+    r = out["message"]["insight"]["response"]["result"]
+    assert r["mode"] == "LOOKUP" and r["lookup"]["rows"][0]["case_id"] == r["case"]["case_id"]
+    assert r["case"]["evidence_ids"] == [real] and "EV-FAKE" not in r["reply"]
+    assert r["reply"].startswith("Found") and f"Top match {r['case']['case_id']}" in r["reply"]
+    assert r["lookup"]["unsupported"] == "" and len(chat_prompts) == 1
+    events = client.get("/api/audit").json()["items"]
+    assert events[0]["event_payload"]["explained_case"] == r["case"]["case_id"]
+
+
+def test_case_lookup_without_why_is_not_explained(client, monkeypatch):
+    calls = []
+
+    def fake(system, prompt, schema, attachment=None):
+        calls.append(schema.__name__)
+        return json.dumps(CASE_PLAN)
+    monkeypatch.setattr(gemini_service, "generate_json", fake)
+    r = _ask(client, "Show the highest risk case")["message"]["insight"]["response"]["result"]
+    assert r["case"] is None and "ChatAnswer" not in calls
+
+
+def test_failed_explanation_keeps_the_plain_lookup(client, monkeypatch):
+    def fake(system, prompt, schema, attachment=None):
+        if schema.__name__ == "ChatAnswer":
+            raise RuntimeError("Gemini timed out")
+        return json.dumps(CASE_PLAN)
+    monkeypatch.setattr(gemini_service, "generate_json", fake)
+    r = _ask(client, "Which case is riskiest and why?")["message"]["insight"]["response"]["result"]
+    assert r["mode"] == "LOOKUP" and r["case"] is None and r["lookup"]["total"] >= 1
+    assert r["lookup"]["unsupported"]  # the gap is still shown honestly
