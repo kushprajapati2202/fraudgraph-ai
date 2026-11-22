@@ -70,7 +70,7 @@ def get_session(session_id: str) -> dict:
 
 @router.delete("/assistant/sessions/{session_id}")
 def delete_session(session_id: str) -> dict:
-    with connect() as conn:
+    with connect(write=True) as conn:
         _session(conn, session_id)
         conn.execute("DELETE FROM assistant_messages WHERE session_id = ?", (session_id,))
         conn.execute("DELETE FROM assistant_sessions WHERE session_id = ?", (session_id,))
@@ -113,7 +113,9 @@ def ask(body: AssistantAskRequest) -> dict:
     insight = ai_common.store(PORTFOLIO, "ASSISTANT", {"question": question, "history": history,
                                                        "session_id": session_id, "case_id": body.case_id},
                               response, extra)
-    with connect() as conn:
+    with connect(write=True) as conn:
+        # The chat may have been deleted while the answer was being generated.
+        _session(conn, session_id)
         cur = conn.execute("INSERT INTO assistant_messages(session_id, question, insight_id, created_at) "
                            "VALUES (?, ?, ?, ?)", (session_id, question, insight["insight_id"], utcnow()))
         conn.execute("UPDATE assistant_sessions SET updated_at = ? WHERE session_id = ?", (utcnow(), session_id))

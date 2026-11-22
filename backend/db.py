@@ -236,9 +236,14 @@ def _connect() -> sqlite3.Connection:
 
 
 @contextmanager
-def connect() -> Iterator[sqlite3.Connection]:
+def connect(write: bool = False) -> Iterator[sqlite3.Connection]:
+    """write=True takes SQLite's write lock up front (BEGIN IMMEDIATE), so a handler that checks state and then
+    writes ("is this ID free?", "is this transfer still held?") cannot interleave with another writer between the
+    check and the write. Readers are unaffected."""
     conn = _connect()
     try:
+        if write:
+            conn.execute("BEGIN IMMEDIATE")
         yield conn
         conn.commit()
     except Exception:
@@ -248,8 +253,21 @@ def connect() -> Iterator[sqlite3.Connection]:
         conn.close()
 
 
+def _schema_statements() -> list[str]:
+    statements, buffer = [], ""
+    for line in SCHEMA.splitlines(keepends=True):
+        buffer += line
+        if sqlite3.complete_statement(buffer):
+            statements.append(buffer.strip())
+            buffer = ""
+    return [s for s in statements if s]
+
+
 def init_schema(conn: sqlite3.Connection) -> None:
-    conn.executescript(SCHEMA)
+    # Statement by statement rather than executescript(): executescript() COMMITs any open transaction first, which
+    # during a reset would publish the dropped tables to concurrent readers ("no such table").
+    for statement in _schema_statements():
+        conn.execute(statement)
     for table, columns in ADDED_COLUMNS.items():
         present = {r["name"] for r in conn.execute(f"PRAGMA table_info({table})")}
         for name, decl in columns.items():

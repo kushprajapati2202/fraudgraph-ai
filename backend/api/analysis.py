@@ -10,5 +10,5 @@ router = APIRouter(tags=["analysis"])
 @router.post("/analysis/run")
 def run_analysis(body: AnalysisRunRequest | None = None) -> dict:
     body = body or AnalysisRunRequest()
-    with connect() as conn:
+    with connect(write=True) as conn:
         return analysis.run(conn, body.time_window_minutes, body.scenario_id)

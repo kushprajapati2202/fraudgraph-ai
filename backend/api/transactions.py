@@ -1,6 +1,6 @@
 import json
 import re
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Literal
 
 from fastapi import APIRouter, Depends, Query
@@ -41,6 +41,12 @@ def list_transactions(
     page_size: int = Query(default=25, ge=1, le=100),
 ) -> dict:
     where, params = [], []
+    for field, value in (("from", from_), ("to", to)):
+        if value:
+            try:
+                datetime.fromisoformat(value)
+            except ValueError:
+                raise AppError(422, "VALIDATION_ERROR", f"'{field}' is not a valid date.", [{"field": field}]) from None
     if account_id:
         where.append("(t.source_account = ? OR t.destination_account = ?)")
         params += [account_id, account_id]
@@ -141,7 +147,7 @@ def ingest_transfer(body: DemoTransactionRequest) -> dict:
     if body.source_account == body.destination_account:
         raise AppError(422, "VALIDATION_ERROR", "Source and destination accounts must differ.",
                        [{"field": "destination_account"}])
-    with connect() as conn:
+    with connect(write=True) as conn:
         lo, hi = conn.execute("SELECT MIN(timestamp), MAX(timestamp) FROM transactions").fetchone()
         if lo is None:
             raise AppError(409, "DATASET_NOT_LOADED", "Reset the demo dataset before adding transactions.")

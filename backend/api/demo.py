@@ -12,7 +12,7 @@ router = APIRouter(tags=["demo"])
 
 @router.post("/demo/reset", dependencies=[Depends(require_demo_token)])
 def reset_demo() -> dict:
-    with connect() as conn:
+    with connect(write=True) as conn:
         summary = dataset.reset(conn)
     return {**summary, "message": "Synthetic dataset restored to baseline. Run analysis to rebuild cases."}
 

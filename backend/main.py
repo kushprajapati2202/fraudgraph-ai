@@ -1,5 +1,6 @@
 import logging
 import os
+import sqlite3
 import time
 import uuid
 from contextlib import asynccontextmanager
@@ -105,6 +106,23 @@ async def http_error_handler(_: Request, exc: StarletteHTTPException):
     code = HTTP_CODES.get(exc.status_code, "HTTP_ERROR")
     message = exc.detail if isinstance(exc.detail, str) else "Request failed."
     return JSONResponse(status_code=exc.status_code, content=error_body(code, message))
+
+
+@app.exception_handler(sqlite3.IntegrityError)
+async def integrity_handler(request: Request, exc: sqlite3.IntegrityError):
+    # A uniqueness or reference check lost a race with a concurrent request: a conflict, not a server fault.
+    logger.warning("request_id=%s integrity conflict: %s", getattr(request.state, "request_id", "-"), exc)
+    return JSONResponse(status_code=409, content=error_body(
+        "CONFLICT", "The request conflicted with a concurrent change. Refresh and try again.", []))
+
+
+@app.exception_handler(sqlite3.OperationalError)
+async def operational_handler(request: Request, exc: sqlite3.OperationalError):
+    if "locked" in str(exc) or "busy" in str(exc):
+        logger.warning("request_id=%s database busy: %s", getattr(request.state, "request_id", "-"), exc)
+        return JSONResponse(status_code=503, headers={"Retry-After": "1"}, content=error_body(
+            "BUSY", "The workspace is busy with another update. Try again in a moment.", []))
+    return await unhandled_handler(request, exc)
 
 
 @app.exception_handler(Exception)
