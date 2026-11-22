@@ -13,7 +13,7 @@ When Gemini is unavailable, a keyword router picks the engine and the lookup run
 import logging
 import re
 import sqlite3
-from typing import Literal
+from typing import Callable, Literal
 
 from pydantic import BaseModel
 
@@ -48,6 +48,10 @@ _ANALYTICS = re.compile(
     r"over time|group(?:ed)? by)\b", re.I)
 _HELP = re.compile(r"^\s*(hi|hello|hey|thanks|thank you|help|what can you do|who are you)\b[\s?!.]*$", re.I)
 
+
+_WHY = re.compile(r"\b(why|explain|explains|reason|reasons|what drives|what drove|what makes|how come)\b", re.I)
+
+CaseLoader = Callable[[sqlite3.Connection, str], tuple[dict, list[dict]]]
 
 _WORKSPACE = re.compile(r"\b(all|every|other|workspace|portfolio|across)\b|\b(cases|transfers)\s+(above|over|below|under|"
                         r"with|from|to|in)\b", re.I)
@@ -106,8 +110,9 @@ def _case_answer(case: dict, evidence: list[dict], question: str, base: dict) ->
 
 
 def answer(conn: sqlite3.Connection, question: str, history: list[dict], case: dict | None = None,
-           evidence: list[dict] | None = None) -> dict:
-    """Returns an ai_common-style response whose result holds at most one of `lookup` / `analytics` / `case`."""
+           evidence: list[dict] | None = None, load_case: "CaseLoader | None" = None) -> dict:
+    """Returns an ai_common-style response whose result holds one of `lookup` / `analytics` / `case`, or `lookup`
+    plus `case` when a "which case ... why" lookup also explains its top case (needs `load_case`)."""
     analytics_on = bigquery_sync.enabled()
     routed = route(question, history, analytics_on, case["case_id"] if case else None)
     base = {"question": question, "standalone_question": routed["question"], "routed_by": routed["routed_by"],
@@ -137,4 +142,34 @@ def answer(conn: sqlite3.Connection, question: str, history: list[dict], case: d
 
     response = ai_insights.ask_portfolio(conn, routed["question"])
     r = response["result"]
-    return {**response, "result": {**base, "mode": "LOOKUP", "reply": _lookup_reply(r), "lookup": r}}
+    reply = _lookup_reply(r)
+    explained = _explain_top_case(conn, routed["question"], r, load_case) if load_case else None
+    if explained:
+        r["unsupported"] = ""  # the "why" part is now answered from the top case's evidence
+        reply = f"{reply} {explained['reply']}"
+        base["case"] = explained["case"]
+    return {**response, "result": {**base, "mode": "LOOKUP", "reply": reply, "lookup": r}}
+
+
+def _explain_top_case(conn: sqlite3.Connection, question: str, r: dict, load_case: CaseLoader) -> dict | None:
+    """'Which case ... and why?': the lookup finds the cases; the top one is explained from its own evidence package.
+    Any failure leaves the plain lookup answer in place."""
+    if not _WHY.search(question) or r["plan"]["target"] != "CASES" or not r["rows"]:
+        return None
+    top = r["rows"][0]
+    try:
+        case, evidence = load_case(conn, top["case_id"])
+        if not evidence:
+            return None
+        response = gemini_service.chat(case, evidence, (
+            f"Why does this case have a risk score of {top['risk_score']} ({top['risk_band']})? Name the signals, "
+            f"accounts and transfers that drive it. Analyst's original question: {question}"))
+    except Exception:  # an explanation is extra; never fail the lookup over it
+        logger.exception("Assistant case explanation failed")
+        return None
+    if response["status"] != "OK":
+        return None
+    a = response["result"]
+    return {"reply": f"Top match {top['case_id']} (risk {top['risk_score']}): {a['answer']}",
+            "case": {"case_id": top["case_id"], "title": top.get("title"), "evidence_ids": a["evidence_ids"],
+                     "grounded": a["grounded"]}}

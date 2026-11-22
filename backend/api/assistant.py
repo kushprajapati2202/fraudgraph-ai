@@ -98,7 +98,8 @@ def ask(body: AssistantAskRequest) -> dict:
             case = _case_row(conn, body.case_id)
             evidence = _evidence(conn, body.case_id)
     with connect() as conn:
-        response = assistant.answer(conn, question, history, case, evidence)
+        response = assistant.answer(conn, question, history, case, evidence,
+                                    load_case=lambda c, cid: (_case_row(c, cid), _evidence(c, cid)))
 
     extra = {"question": question[:120], "session_id": session_id, "case_id": body.case_id}
     if response["status"] == "OK":
@@ -108,8 +109,8 @@ def ask(body: AssistantAskRequest) -> dict:
             extra.update(rows=r["analytics"]["row_count"], bytes_billed=r["analytics"]["bytes_billed"])
         elif r["lookup"]:
             extra.update(results=r["lookup"]["total"])
-        elif r.get("case"):
-            extra.update(evidence_ids=r["case"]["evidence_ids"])
+        if r.get("case"):
+            extra.update(explained_case=r["case"]["case_id"], evidence_ids=r["case"]["evidence_ids"])
     insight = ai_common.store(PORTFOLIO, "ASSISTANT", {"question": question, "history": history,
                                                        "session_id": session_id, "case_id": body.case_id},
                               response, extra)
