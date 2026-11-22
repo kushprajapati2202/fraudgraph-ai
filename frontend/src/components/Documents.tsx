@@ -85,7 +85,7 @@ function DocumentResult({ doc, preview }: { doc: DocumentRecord; preview?: strin
         </span>
       </div>
       <div className="small muted">
-        {e.document_type || "Document"} &middot; checked against <span className="mono">{doc.transaction_id}</span> &middot; {r.model} &middot; {fmtTime(doc.created_at)} UTC
+        {e.document_type || "Document"} &middot; checked against <span className="mono">{doc.transaction_id}</span> &middot; {fmtTime(doc.created_at)} UTC
         &middot; {doc.actor_label}
       </div>
       <p className="small" style={{ marginTop: 6 }}>{v.help}</p>

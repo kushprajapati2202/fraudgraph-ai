@@ -110,7 +110,7 @@ The **Tour** button in the top bar starts a 24-step walkthrough that moves throu
 6. Under **Mitigation actions**, approve *Hold for manual review* on the collector account. Go back to the Simulator and send the suggested transfer again: it is **held** and the money does not move. On the case, reject it with a reason. The overview's *Funds held by controls* tile updates.
 7. On the case, open **What our policy says** (Vertex AI Search) and the **BigQuery ML second view**. Upload `docs/samples/booking-receipt.png` to see Gemini and Document AI cross-check each other.
 8. Record a human decision with a rationale and show the audit history (System / AI / Human icons).
-9. On the overview, **Ask BigQuery** a question, then open *SQL and safety checks* to show the generated SQL and the dry run.
+9. On the overview, ask the **Assistant** "Flagged amount by channel" (routed to BigQuery: Gemini SQL behind a read-only guard, dry run and cost cap; open *Safety checks*), then a lookup such as "IMPS transfers above 1 lakh" and the follow-up "only the ones to newly opened accounts". Reload: the chat is still there. Click **Open in panel** on the card (or press Ctrl+J anywhere) to keep the same chat in a side panel on any page; on a case it attaches the case as context, answers from its evidence, and lists its mitigation actions under `/` (each needs your approval before it takes effect).
 10. Show the measured synthetic results in [docs/evaluation.md](docs/evaluation.md).
 
 Say during the walkthrough: *"These are synthetic transactions. The application processes the event live, but no real bank transaction is being created or modified."*

@@ -1,12 +1,11 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { api, type AskResult, type DayExplanationResult, type Insight } from "../api/client";
+import { api, type DayExplanationResult, type Insight } from "../api/client";
 import { useAiStatus } from "../health";
-import { caseHeadline, fmtAmount, fmtCompact, fmtDay, fmtTime, plural, useAsync } from "../util";
+import { fmtDay, fmtTime, plural, useAsync } from "../util";
 import { Busy, CaseLinks, SourceNote, useRun } from "./ai";
-import { ErrorState, Loading, RiskBadge, StatusChip } from "./common";
+import { ErrorState, Loading, RiskBadge } from "./common";
 import { IconSparkle } from "./icons";
-import { useInspector } from "./Inspector";
 
 function AiHead({ id, title, chip }: { id: string; title: string; chip: string }) {
   return (
@@ -47,7 +46,7 @@ export function BriefingCard({ refreshKey }: { refreshKey: number }) {
 
   return (
     <section className="card ai-card briefing" aria-labelledby="briefing-heading" data-tour="dash-briefing">
-      <AiHead id="briefing-heading" title="Shift briefing" chip="AI · advisory" />
+      <AiHead id="briefing-heading" title="Threat briefing" chip="AI · advisory" />
       {data.loading && !current ? <Loading label="Preparing briefing" /> : null}
       {data.error && !current ? <ErrorState message={data.error} onRetry={data.reload} /> : null}
       {current?.response.result ? (
@@ -91,14 +90,20 @@ export function BriefingCard({ refreshKey }: { refreshKey: number }) {
             </>
           ) : null}
           <div className="row-center ai-foot">
-            <SourceNote rec={current} />
-            <button className="btn btn-small btn-primary" onClick={ask} disabled={busy}>
-              <IconSparkle size={14} /> {busy ? "Writing..." : current.response.source === "GEMINI" ? "Refresh" : "Write with Gemini"}
-            </button>
+            <span className="source-note">
+              Last updated {fmtTime(current.created_at)} UTC
+              {current.stale ? <span className="chip chip-warn">data changed since</span> : null}
+            </span>
+            <div className="inline">
+              {busy ? <span className="spinner" role="status" aria-label="Updating briefing" /> : null}
+              <button className="btn btn-small btn-primary" onClick={ask} disabled={busy}>
+                <IconSparkle size={14} /> {busy ? "Updating..." : current.response.source === "GEMINI" ? "Refresh" : "Write with Gemini"}
+              </button>
+            </div>
           </div>
         </div>
       ) : null}
-      {busy ? <Busy label="Gemini is reading the queue..." /> : null}
+      {busy && !current?.response.result ? <Busy label="Gemini is reading the queue..." /> : null}
       {error ? <div className="callout callout-error" role="alert">{error}</div> : null}
     </section>
   );
@@ -148,159 +153,21 @@ export function PatternsCard({ refreshKey }: { refreshKey: number }) {
             </button>
           ) : null}
           <div className="row-center ai-foot">
-            <span className="muted small">
-              {r.method === "GEMINI_EMBEDDINGS" ? "Grouped by Gemini embeddings and shared signals." : "Grouped by shared signals, accounts and devices."}
+            <span className="source-note">
+              Last updated {fmtTime(current!.created_at)} UTC
+              {current!.stale ? <span className="chip chip-warn">data changed since</span> : null}
             </span>
-            <SourceNote rec={current!} />
-            <button className="btn btn-small btn-primary" onClick={async () => { if (await run(() => api.makePatterns())) data.reload(); }} disabled={busy}>
-              <IconSparkle size={14} /> {busy ? "Analysing..." : current!.response.source === "GEMINI" ? "Refresh" : "Analyse with Gemini"}
-            </button>
-          </div>
-        </div>
-      ) : null}
-      {busy ? <Busy label="Embedding case behaviour and naming patterns..." /> : null}
-      {error ? <div className="callout callout-error" role="alert">{error}</div> : null}
-    </section>
-  );
-}
-
-const EXAMPLES = [
-  "IMPS transfers above 1 lakh to new accounts",
-  "Which accounts received money with rapid onward movement?",
-  "High priority open cases",
-  "Flagged transfers in the last week",
-];
-
-function AskTable({ r }: { r: AskResult }) {
-  const { openTransaction, openAccount } = useInspector();
-  if (!r.rows.length) return <p className="muted small">Nothing matches. Try a wider range or fewer filters.</p>;
-  if (r.plan.target === "CASES") {
-    return (
-      <table className="table compact">
-        <thead>
-          <tr><th scope="col">Case</th><th scope="col">Status</th><th scope="col" className="num">Amount</th><th scope="col">Priority</th></tr>
-        </thead>
-        <tbody>
-          {r.rows.map((c) => (
-            <tr key={c.case_id}>
-              <td><Link to={`/cases/${c.case_id}`}>{caseHeadline(c.title)}</Link> <span className="mono small muted">{c.case_id}</span></td>
-              <td><StatusChip status={c.status} /></td>
-              <td className="num tnum">{fmtAmount(c.total_amount)}</td>
-              <td><RiskBadge band={c.risk_band} score={c.risk_score} /></td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    );
-  }
-  if (r.plan.target === "ACCOUNTS") {
-    return (
-      <table className="table compact">
-        <thead>
-          <tr><th scope="col">Account</th><th scope="col" className="num">Matching transfers</th><th scope="col" className="num">Amount</th><th scope="col">Highest score</th></tr>
-        </thead>
-        <tbody>
-          {r.rows.map((a) => (
-            <tr key={a.account_id}>
-              <td>
-                <button className="link-button" onClick={() => openAccount(a.account_id)}>{a.holder_name ?? a.account_id}</button>{" "}
-                <span className="mono small muted">{a.account_id}</span>
-              </td>
-              <td className="num tnum">{a.transfers}</td>
-              <td className="num tnum">{fmtAmount(a.amount)}</td>
-              <td><RiskBadge band={a.max_score >= 60 ? "HIGH" : a.max_score >= 30 ? "MEDIUM" : "LOW"} score={a.max_score} /></td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    );
-  }
-  return (
-    <table className="table compact">
-      <thead>
-        <tr><th scope="col">Time (UTC)</th><th scope="col">From &rarr; To</th><th scope="col" className="num">Amount</th><th scope="col">Priority</th></tr>
-      </thead>
-      <tbody>
-        {r.rows.map((t) => (
-          <tr key={t.transaction_id}>
-            <td className="small nowrap">
-              <button className="link-button mono small" onClick={() => openTransaction(t.transaction_id)}>{t.transaction_id}</button>
-              <div className="muted">{fmtTime(t.timestamp)}</div>
-            </td>
-            <td>
-              {t.source_name ?? t.source_account} <span className="muted">&rarr;</span> {t.destination_name ?? t.destination_account}
-              <div className="muted small">{t.channel}</div>
-            </td>
-            <td className="num tnum">{fmtAmount(t.amount, t.currency)}</td>
-            <td><RiskBadge band={t.risk_band} score={t.score} /></td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  );
-}
-
-/** Plain-language questions. Gemini maps the question to a fixed filter plan; the server runs the query itself. */
-export function AskPortfolio() {
-  const [q, setQ] = useState("");
-  const [rec, setRec] = useState<Insight<AskResult> | null>(null);
-  const { busy, error, run } = useRun();
-
-  async function submit(e?: FormEvent, text?: string) {
-    e?.preventDefault();
-    const question = (text ?? q).trim();
-    if (question.length < 3) return;
-    setQ(question);
-    const r = await run(() => api.askPortfolio(question));
-    if (r) setRec(r);
-  }
-  const r = rec?.response.result;
-
-  return (
-    <section className="card ai-card ask-hero" aria-labelledby="ask-heading" data-tour="dash-ask">
-      <h2 id="ask-heading" className="visually-hidden">Ask the portfolio</h2>
-      <form className="ask-bar" onSubmit={submit} role="search">
-        <span className="ai-mark"><IconSparkle size={18} /></span>
-        <label className="grow">
-          <span className="visually-hidden">Question about transfers, cases or accounts</span>
-          <input type="text" value={q} maxLength={300} placeholder="Ask the portfolio, e.g. which accounts received over 2 lakh from newly opened accounts?" onChange={(e) => setQ(e.target.value)} />
-        </label>
-        <span className="chip chip-ai ask-badge" title="Gemini never sees the records. It turns the question into a fixed set of filters; the server checks them and runs the query.">
-          Gemini &rarr; safe filters
-        </span>
-        <button className="btn btn-primary" type="submit" disabled={busy || q.trim().length < 3}>
-          {busy ? "Asking..." : "Ask"}
-        </button>
-      </form>
-      <div className="ask-meta">
-        <div className="chip-row">
-          <span className="muted small">Try:</span>
-          {EXAMPLES.map((x) => (
-            <button key={x} className="chip chip-button" onClick={() => submit(undefined, x)} disabled={busy}>
-              {x}
-            </button>
-          ))}
-        </div>
-      </div>
-      {busy ? <Busy label="Planning the query..." /> : null}
-      {error ? <div className="callout callout-error" role="alert">{error}</div> : null}
-      {r && rec ? (
-        <div className="stack-sm" style={{ marginTop: 10 }} aria-live="polite">
-          <div className="ask-interpretation">
-            <strong>{r.interpretation}</strong>
-            <div className="muted small">
-              Filters applied: {r.plan_summary} &middot; {r.total.toLocaleString()} {r.plan.target.toLowerCase()} match
-              {r.plan.target !== "CASES" ? <> &middot; {fmtCompact(r.total_amount)}</> : null}
-              {r.total > r.rows.length ? <> &middot; showing {r.rows.length}</> : null}
+            <div className="inline">
+              {busy ? <span className="spinner" role="status" aria-label="Updating patterns" /> : null}
+              <button className="btn btn-small btn-primary" onClick={async () => { if (await run(() => api.makePatterns())) data.reload(); }} disabled={busy}>
+                <IconSparkle size={14} /> {busy ? "Updating..." : current!.response.source === "GEMINI" ? "Refresh" : "Analyse with Gemini"}
+              </button>
             </div>
           </div>
-          {r.unsupported ? <div className="callout callout-info small">Not covered by the filters: {r.unsupported}</div> : null}
-          <div className="table-scroll">
-            <AskTable r={r} />
-          </div>
-          <SourceNote rec={rec} />
         </div>
       ) : null}
+      {busy && !r ? <Busy label="Embedding case behaviour and naming patterns..." /> : null}
+      {error ? <div className="callout callout-error" role="alert">{error}</div> : null}
     </section>
   );
 }

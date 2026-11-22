@@ -19,21 +19,9 @@ const STEPS: Step[] = [
   },
   {
     route: "/",
-    target: '[data-tour="env"]',
-    title: "Your environment",
-    body: "This workspace runs in a sandbox on synthetic data. No real customer data is loaded and no real payment can be created, blocked or changed from here.",
-  },
-  {
-    route: "/",
     target: ".search",
     title: "Find anything",
     body: "Search by case, account holder name, account ID, or a transfer reference. Press Ctrl+K from any page to jump here.",
-  },
-  {
-    route: "/",
-    target: '[data-tour="ai-status"]',
-    title: "Is the AI connected?",
-    body: "Green means Gemini is answering. Amber means your key is valid but Google's models are busy. Red means the key or network needs attention. Click to re-check. Everything else works either way.",
   },
   {
     route: "/",
@@ -43,9 +31,15 @@ const STEPS: Step[] = [
   },
   {
     route: "/",
+    target: '[data-tour="dash-ask"]',
+    title: "Ask the assistant",
+    body: "Ask in plain words. Lookups such as \"IMPS transfers above 1 lakh\" run as checked filters on your records; totals and trends such as \"flagged amount by channel\" run as a read-only BigQuery query. Follow-ups such as \"only UPI\" build on the last answer.",
+  },
+  {
+    route: "/",
     target: '[data-tour="dash-recs"]',
     title: "Recommended for you",
-    body: "Up to five next steps picked for you: overdue tasks, transfers waiting on your holds, cases you asked for more evidence on, and new cases that look like ones you escalated. Set your name in Settings to make it personal.",
+    body: "Up to five next steps picked for you: overdue tasks, transfers waiting on your holds, cases you asked for more evidence on, and new cases that look like ones you escalated.",
   },
   {
     route: "/",
@@ -63,7 +57,7 @@ const STEPS: Step[] = [
     route: "/cases/{case}",
     target: '[data-tour="case-header"]',
     title: "A case at a glance",
-    body: "The priority score, the rule version that produced it, and the review status. A high score means review first. It is not a finding of fraud.",
+    body: "The priority score, the rule version that produced it, and the review status. A high score means review first. It is not a probability of fraud or a finding against anyone; hover the ⓘ next to the score any time for a reminder.",
   },
   {
     route: "/cases/{case}",

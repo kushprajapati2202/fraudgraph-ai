@@ -162,6 +162,20 @@ CREATE TABLE IF NOT EXISTS ai_insights (
     created_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS ix_insights_scope ON ai_insights(scope, kind);
+CREATE TABLE IF NOT EXISTS assistant_sessions (
+    session_id TEXT PRIMARY KEY,
+    title TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS assistant_messages (
+    message_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id TEXT NOT NULL REFERENCES assistant_sessions(session_id) ON DELETE CASCADE,
+    question TEXT NOT NULL,
+    insight_id INTEGER NOT NULL,
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS ix_assistant_messages ON assistant_messages(session_id, message_id);
 CREATE TABLE IF NOT EXISTS ml_scores (
     transaction_id TEXT PRIMARY KEY,
     probability REAL NOT NULL,
@@ -200,7 +214,8 @@ CREATE TABLE IF NOT EXISTS analysis_runs (
 TABLES = [
     "meta", "accounts", "transactions", "labels", "risk_assessments", "cases",
     "case_evidence", "analyst_decisions", "mitigation_actions", "transfer_controls", "case_documents", "ai_investigations",
-    "ai_insights", "audit_events", "analysis_runs", "ml_scores", "stream_events",
+    "ai_insights", "audit_events", "analysis_runs", "ml_scores", "stream_events", "assistant_messages",
+    "assistant_sessions",
 ]
 
 # Columns added after a table first shipped; applied to databases created by an older build.

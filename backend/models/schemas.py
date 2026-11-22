@@ -160,6 +160,13 @@ class AskRequest(BaseModel):
     question: str = Field(min_length=3, max_length=300)
 
 
+class AssistantAskRequest(BaseModel):
+    question: str = Field(min_length=3, max_length=300)
+    session_id: str | None = Field(default=None, pattern=r"^CHAT-[0-9A-F]{8}$")
+    # The case the analyst has open, attached as context: questions about it are answered from its evidence.
+    case_id: str | None = Field(default=None, max_length=40)
+
+
 class ContactScriptRequest(BaseModel):
     account_id: str = Field(pattern=r"^AC-\d{3,4}$")
     channel: Literal["CALL", "SMS", "EMAIL"] = "CALL"

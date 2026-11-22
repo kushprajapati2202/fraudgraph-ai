@@ -139,3 +139,41 @@ def test_pubsub_push_is_idempotent_and_enforces_token(client, monkeypatch):
     events = client.get("/api/cloud/stream/events").json()["events"]
     assert [e["status"] for e in events if e["message_id"] == "m-1"] == ["PROCESSED"]
     assert client.get("/api/transactions/TX-D100001").json()["assessment"]["score"] is not None
+
+
+# ---- Assistant routing to BigQuery ----
+
+def _route(monkeypatch, route):
+    from backend.services import assistant
+    monkeypatch.setattr(assistant, "route", lambda q, h, on, case_id=None: {"route": route, "question": q, "routed_by": "GEMINI"})
+
+
+def test_assistant_routes_totals_to_bigquery(client, bq, monkeypatch):
+    _route(monkeypatch, "ANALYTICS")
+    monkeypatch.setattr(bigquery_ask, "ask", lambda q: {"status": "OK", "source": "GEMINI", "model": "m",
+                        "prompt_version": "v", "validation": {"removed_ids": []}, "result": {
+                            "question": q, "interpretation": "Per channel", "columns": ["channel", "n"],
+                            "rows": [{"channel": "UPI", "n": 42}], "row_count": 1, "chart": "BAR",
+                            "x_column": "channel", "y_column": "n", "answer": "UPI leads with 42.",
+                            "answer_source": "GEMINI", "bytes_estimated": 1, "bytes_billed": 2, "repairs": 0}})
+    r = client.post("/api/assistant/ask", json={"question": "transfers by channel"}).json()["message"]["insight"]["response"]["result"]
+    assert r["mode"] == "ANALYTICS" and r["reply"] == "UPI leads with 42." and r["lookup"] is None
+    assert "sql" not in r["analytics"]
+
+
+def test_assistant_unsafe_sql_falls_back_to_lookup(client, bq, monkeypatch):
+    _route(monkeypatch, "ANALYTICS")
+
+    def rejected(q):
+        raise bigquery_ask.SqlRejected("Keyword DELETE is not allowed.")
+    monkeypatch.setattr(bigquery_ask, "ask", rejected)
+    r = client.post("/api/assistant/ask", json={"question": "high risk cases by status"}).json()["message"]["insight"]["response"]["result"]
+    assert r["mode"] == "LOOKUP" and "safely" in r["note"] and r["lookup"]["rows"] is not None
+    assert "DELETE" not in json.dumps(r)
+
+
+def test_grounded_answer_accepts_indian_rupee_formats():
+    rows = [{"channel": "NEFT", "flagged_amount": 4749700.0, "n": 4}]
+    assert bigquery_ask.grounded_answer("NEFT flagged ₹47,49,700 across 4 transfers.", rows)
+    assert bigquery_ask.grounded_answer("NEFT flagged ₹47.5 lakh across 4 transfers.", rows)
+    assert not bigquery_ask.grounded_answer("NEFT flagged ₹52,00,000.", rows)

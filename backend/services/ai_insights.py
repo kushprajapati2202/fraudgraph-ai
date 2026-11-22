@@ -73,7 +73,7 @@ def _daily(conn: sqlite3.Connection) -> list[dict]:
         "GROUP BY day ORDER BY day", (CASE_MIN_SCORE, CASE_MIN_SCORE))]
 
 
-# ---- 1. Shift briefing ----
+# ---- 1. Threat briefing ----
 
 class BriefingPoint(BaseModel):
     text: str
@@ -184,7 +184,7 @@ def briefing(conn: sqlite3.Connection, use_ai: bool) -> dict:
     if not use_ai:
         return from_rules(_rules_briefing(f))
     task = ("Write a start-of-shift briefing for a fraud analyst team: a one-line headline (do not start it with "
-            "'Shift briefing'), a 2-3 sentence summary of "
+            "'Threat briefing' or 'Shift briefing'), a 2-3 sentence summary of "
             "what changed and what matters, up to 4 highlights (each citing the case_ids it is about, or none), and up "
             "to 3 next actions ranked by urgency, each for one case_id with a short concrete reason. Pending held "
             "transfers and high-priority open cases come first.")

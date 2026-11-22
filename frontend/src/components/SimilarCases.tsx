@@ -101,7 +101,7 @@ export default function SimilarCases({ caseId, catalog }: { caseId: string; cata
               This case is described in plain language without names or account numbers: &ldquo;{data.case_description}&rdquo;
             </p>
             <p className="small muted" style={{ marginTop: 6 }}>
-              Scoring: {data.scoring}. Compared with {data.archive_size} archived cases{data.model ? ` using ${data.model}` : ""}.
+              Scoring: {data.scoring}. Compared with {data.archive_size} archived cases.
             </p>
           </details>
           <p className="muted small" style={{ marginTop: 10 }}>{data.note}</p>

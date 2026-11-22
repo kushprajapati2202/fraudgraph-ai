@@ -54,7 +54,7 @@ Rules:
 Return only JSON matching the schema."""
 
 
-ANSWER_PROMPT = """You summarise a query result for a fraud analyst in at most two sentences. Use only the ROWS given; every number you mention must appear in them (you may round). Use neutral language; never say anyone is guilty. Return JSON matching the schema."""
+ANSWER_PROMPT = """You summarise a query result for a fraud analyst in at most two sentences. Use only the ROWS given; every number you mention must appear in them (you may round). Write money as Indian rupees with Indian digit grouping and no decimals (₹47,49,700) or in lakh with one decimal (₹47.5 lakh); write counts as whole numbers. Use neutral language; never say anyone is guilty. Return JSON matching the schema."""
 
 
 class SqlRejected(Exception):

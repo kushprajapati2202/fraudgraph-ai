@@ -619,6 +619,37 @@ export interface AskResult {
   total_amount: number;
 }
 
+export interface AssistantSession {
+  session_id: string;
+  title: string;
+  created_at: string;
+  updated_at: string;
+  messages: number;
+}
+
+export interface AssistantMessage {
+  message_id: number;
+  question: string;
+  created_at: string;
+  /** Null only if the stored answer was removed (e.g. by a workspace reset). */
+  insight: Insight<AssistantResult> | null;
+}
+
+export interface AssistantResult {
+  question: string;
+  /** The question as the assistant understood it, with follow-ups resolved against the conversation. */
+  standalone_question: string;
+  mode: "LOOKUP" | "ANALYTICS" | "HELP" | "CASE";
+  routed_by: "GEMINI" | "RULES";
+  /** Set when an analytics question was answered with matching records instead. */
+  note: string;
+  reply: string;
+  lookup: AskResult | null;
+  analytics: BigQueryAskResult | null;
+  /** Set when the question was about the case attached as context; answered from that case's evidence only. */
+  case?: { case_id: string; title: string | null; evidence_ids: string[]; grounded: boolean } | null;
+}
+
 export interface TuningSuggestion {
   parameter: string;
   current_value: number;
@@ -1117,6 +1148,16 @@ export const api = {
   makePatterns: () => request<Insight<PatternsResult>>("POST", "/api/ai/patterns"),
   explainDay: (day: string, refresh = false) => request<Insight<DayExplanationResult>>("POST", "/api/ai/explain-day", { day, refresh }),
   askPortfolio: (question: string) => request<Insight<AskResult>>("POST", "/api/ai/ask", { question }),
+  assistantSessions: () => request<{ items: AssistantSession[] }>("GET", "/api/assistant/sessions"),
+  assistantSession: (id: string) =>
+    request<{ session: AssistantSession; messages: AssistantMessage[] }>("GET", `/api/assistant/sessions/${encodeURIComponent(id)}`),
+  assistantAsk: (question: string, sessionId: string | null, caseId: string | null = null) =>
+    request<{ session: AssistantSession; message: AssistantMessage }>("POST", "/api/assistant/ask", {
+      question,
+      session_id: sessionId,
+      case_id: caseId,
+    }),
+  deleteAssistantSession: (id: string) => request<{ deleted: string }>("DELETE", `/api/assistant/sessions/${encodeURIComponent(id)}`),
   ruleTuning: () => request<Insight<RuleTuningResult>>("GET", "/api/ai/rule-tuning"),
   makeRuleTuning: () => request<Insight<RuleTuningResult>>("POST", "/api/ai/rule-tuning"),
   redTeam: () => request<Insight<RedTeamResult>>("GET", "/api/ai/red-team"),

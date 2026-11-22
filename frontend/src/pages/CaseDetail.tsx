@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api } from "../api/client";
-import { AccountControlTags, Avatar, ControlTag, ErrorState, Loading, RiskBadge, ScoreRing, StatusChip, SyntheticTag } from "../components/common";
+import { AccountControlTags, Avatar, ControlTag, ErrorState, Loading, RiskBadge, ScoreInfo, ScoreRing, StatusChip, SyntheticTag } from "../components/common";
 import { Busy, SecondOpinion, SourceNote, useRun } from "../components/ai";
 import { CounterfactualCard, StrDraftCard } from "../components/CaseAssist";
 import { DecisionPanel } from "../components/DecisionPanel";
@@ -9,6 +9,7 @@ import DocumentPanel from "../components/Documents";
 import EvidenceList from "../components/EvidenceList";
 import { useInspector } from "../components/Inspector";
 import InvestigatorPanel from "../components/InvestigatorPanel";
+import { useAssistantCase } from "../components/Assistant";
 import { ActionsPanel, ReportPanel } from "../components/Mitigation";
 import SimilarCases from "../components/SimilarCases";
 import { CaseMlCard, CaseMlChip, PolicyCard } from "../components/Cloud";
@@ -36,6 +37,7 @@ export default function CaseDetailPage() {
     [narration],
   );
   usePageTitle(detail.data ? `${caseId} · ${caseHeadline(detail.data.case.title)}` : caseId);
+  useAssistantCase(caseId, detail.data ? caseHeadline(detail.data.case.title) : null, detail.reload);
 
   if (detail.loading && !detail.data) return <Loading label="Loading case" />;
   if (detail.error) return <ErrorState message={detail.error} onRetry={detail.reload} />;
@@ -59,7 +61,10 @@ export default function CaseDetailPage() {
       </nav>
 
       <header className="card case-hero" data-tour="case-header">
-        <ScoreRing score={c.risk_score} band={c.risk_band} size={84} />
+        <div className="score-with-info">
+          <ScoreRing score={c.risk_score} band={c.risk_band} size={84} />
+          <ScoreInfo ruleVersion={c.rule_version} />
+        </div>
         <div className="case-hero-main">
           <h1>{caseHeadline(c.title)}</h1>
           <p style={{ marginTop: 2 }}>
@@ -94,7 +99,6 @@ export default function CaseDetailPage() {
           <StatusChip status={c.status} />
           <SecondOpinion rule={c.risk_band} ai={d.latest_investigation?.response.result?.review_priority} />
           <CaseMlChip caseId={c.case_id} />
-          <p className="small muted">The score ranks review priority. It is not a probability of fraud or a finding against anyone.</p>
         </div>
       </header>
 

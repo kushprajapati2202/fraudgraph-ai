@@ -268,3 +268,5 @@ def test_safe_filter_unit():
     assert case_ai._safe("We will never ask for your PIN.", removed) == "We will never ask for your PIN."
     assert case_ai._safe("यह संदिग्ध है। धन्यवाद।", removed) == "धन्यवाद।"
     assert case_ai._safe("This is FraudGraph support. It looks fraudulent.", removed) == "This is FraudGraph support."
+
+

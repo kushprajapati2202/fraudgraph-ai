@@ -43,7 +43,7 @@ function buildMarkdown(d: CaseDetail, labelOf: (code: string) => string, nameOf:
   if (r) {
     const resp = d.latest_report!.response;
     L.push("", "## AI-drafted escalation report (advisory)", "");
-    L.push(`_Drafted by ${resp.model} (${resp.prompt_version}) on ${fmtTime(d.latest_report!.created_at)} UTC. ${resp.validation?.valid_citations ?? 0} citations verified against case evidence; ${resp.validation?.removed_ids.length ?? 0} invalid references removed. Requires human review._`, "");
+    L.push(`_Drafted by Gemini on ${fmtTime(d.latest_report!.created_at)} UTC. ${resp.validation?.valid_citations ?? 0} citations verified against case evidence; ${resp.validation?.removed_ids.length ?? 0} invalid references removed. Requires human review._`, "");
     L.push(`**${r.headline}**`, "", r.executive_summary, "");
     L.push("### Accounts and roles", "");
     r.subject_accounts.forEach((a) => L.push(`- ${a.account_id}: ${a.role} [${a.evidence_ids.join(", ")}]`));
@@ -391,7 +391,7 @@ export function ReportPanel({ detail, onChanged }: Props) {
       {r ? (
         <div className="stack-sm" style={{ marginTop: 14 }} aria-live="polite">
           <div className="muted small">
-            {resp?.model} &middot; {resp?.prompt_version} &middot; {fmtTime(record?.created_at)} UTC &middot; {resp?.validation?.valid_citations ?? 0} citations verified
+            Last updated {fmtTime(record?.created_at)} UTC &middot; {resp?.validation?.valid_citations ?? 0} citations verified
             {resp?.validation && (resp.validation.removed_ids.length > 0 || (resp.validation.removed_accounts?.length ?? 0) > 0)
               ? ` · ${resp.validation.removed_ids.length + (resp.validation.removed_accounts?.length ?? 0)} invalid reference(s) removed`
               : ""}
@@ -403,7 +403,7 @@ export function ReportPanel({ detail, onChanged }: Props) {
       {fullView && r ? (
         <Modal
           title={<><span className="ai-mark" aria-hidden="true"><IconSparkle size={17} /></span> Escalation report</>}
-          subtitle={<>{caseId} &middot; {resp?.model} &middot; {fmtTime(record?.created_at)} UTC &middot; {resp?.validation?.valid_citations ?? 0} citations verified</>}
+          subtitle={<>{caseId} &middot; {fmtTime(record?.created_at)} UTC &middot; {resp?.validation?.valid_citations ?? 0} citations verified</>}
           onClose={closeFullView}
           footer={
             <div className="row-center" style={{ width: "100%", justifyContent: "space-between" }}>
@@ -505,7 +505,7 @@ export function ActionsPanel({ detail, onChanged }: Props) {
       <div className="card-head">
         <div>
           <h2 id="actions-heading">Mitigation actions</h2>
-          <div className="card-sub">Recommended by the rule playbook and the AI draft. Nothing takes effect until you approve it.</div>
+          <div className="card-sub">Recommended by the rule playbook and the AI draft. Nothing takes effect until you approve it. The priority score is not evidence, so check the signals first.</div>
         </div>
         <span className="chip" style={{ marginLeft: 0 }}>{detail.actions.filter(inEffect).length} in effect</span>
       </div>

@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useId, type ReactNode } from "react";
 import type { AccountControl, CaseStatus, ControlStatus, RiskBand } from "../api/client";
 import { initials } from "../prefs";
 
@@ -40,6 +40,22 @@ export function ScoreRing({ score, band, size = 56 }: { score: number; band: Ris
           {score}
           {size >= 64 ? <small>{BAND_LABEL[band].toUpperCase()}</small> : null}
         </span>
+      </span>
+    </span>
+  );
+}
+
+/** "ⓘ" next to a priority score: explains what the score means on hover, focus or tap, instead of a permanent disclaimer. */
+export function ScoreInfo({ ruleVersion }: { ruleVersion?: string }) {
+  const id = useId();
+  return (
+    <span className="info-tip">
+      <button type="button" className="info-tip-btn" aria-label="What the priority score means" aria-describedby={id}>
+        i
+      </button>
+      <span role="tooltip" id={id} className="info-tip-body">
+        <strong>Review priority, 0-100</strong>
+        Ranks which cases to review first{ruleVersion ? `, from rules ${ruleVersion}` : ""}. It is not a probability of fraud or a finding against anyone.
       </span>
     </span>
   );
